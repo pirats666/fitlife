@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
@@ -14,8 +13,9 @@ const app = Fastify({ logger: true });
 const configuredOrigin = process.env.WEBAPP_ORIGIN?.trim();
 await app.register(cors, { origin: configuredOrigin || true });
 
-const currentFile = fileURLToPath(import.meta.url);
-const webappRoot = path.resolve(path.dirname(currentFile), '../../webapp');
+const webappRoot = process.env.NODE_ENV === 'production'
+  ? path.resolve(process.cwd(), 'webapp')
+  : path.resolve(process.cwd(), '../webapp');
 await app.register(fastifyStatic, { root: webappRoot, prefix: '/' });
 
 async function authenticatedUser(initData: string | undefined) {
