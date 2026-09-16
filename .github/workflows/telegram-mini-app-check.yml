@@ -1,0 +1,26 @@
+name: Telegram Mini App check
+
+on:
+  push:
+    branches: [main, feature/telegram-mini-app]
+  pull_request:
+    branches: [main]
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [backend, bot]
+    defaults:
+      run:
+        working-directory: apps/telegram-mini-app/${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/telegram-mini-app/${{ matrix.app }}/package.json
+      - run: npm install
+      - run: npx tsc --noEmit
