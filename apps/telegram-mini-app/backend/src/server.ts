@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import cors from '@fastify/cors';
 import Fastify from 'fastify';
 import { validateTelegramInitData } from './telegram-auth.js';
 import { getUser, updateUser, upsertUser, completeWorkout, getWorkoutHistory, getTrainerClients, assignClient, getClientTrainer, isTrainer, isClientAssigned } from './store.js';
@@ -7,6 +8,8 @@ import { getWeeklySchedule } from './schedule.js';
 import { getClientSchedule, setClientSchedule } from './trainer.js';
 
 const app = Fastify({ logger: true });
+const configuredOrigin = process.env.WEBAPP_ORIGIN?.trim();
+await app.register(cors, { origin: configuredOrigin || true });
 
 async function authenticatedUser(initData: string | undefined) {
   if (!initData) return undefined;
@@ -22,7 +25,7 @@ async function trainerAuthorized(request: { headers: Record<string, string | str
   return authUser?.id === trainerId && await isTrainer(trainerId);
 }
 
-app.get('/health', async () => ({ ok: true, service: 'fitlife-telegram-backend' }));
+app.get('/health', async () => ({ ok: true, service: 'fitlife-telegram-backend', storage: 'supabase' }));
 app.post<{ Body: { initData?: string } }>('/api/auth/telegram', async (request, reply) => {
   try { return { ok: true, user: await upsertUser(validateTelegramInitData(request.body?.initData ?? '', process.env.TELEGRAM_BOT_TOKEN ?? '')) }; }
   catch (error) { return reply.code(401).send({ ok: false, error: error instanceof Error ? error.message : 'Unauthorized' }); }
