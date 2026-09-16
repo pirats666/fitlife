@@ -1,0 +1,43 @@
+name: FitLife Telegram Mini App
+
+on:
+  push:
+    branches: [main, feature/telegram-mini-app]
+    paths:
+      - 'apps/telegram-mini-app/**'
+      - '.github/workflows/fitlife-telegram-mini-app.yml'
+  pull_request:
+    paths:
+      - 'apps/telegram-mini-app/**'
+      - '.github/workflows/fitlife-telegram-mini-app.yml'
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/telegram-mini-app/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/telegram-mini-app/backend/package-lock.json
+      - run: npm install
+      - run: npm run typecheck
+
+  bot:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/telegram-mini-app/bot
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/telegram-mini-app/bot/package-lock.json
+      - run: npm install
+      - run: npx tsc --noEmit
