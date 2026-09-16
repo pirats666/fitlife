@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>FitLife</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div>
+        <span class="eyebrow">FITLIFE</span>
+        <h1>Привет 👋</h1>
+      </div>
+      <button class="avatar" id="profileButton" aria-label="Профиль">👤</button>
+    </header>
+
+    <main>
+      <section class="hero-card">
+        <span>Сегодня</span>
+        <h2>Твоя тренировка</h2>
+        <p>Будь последовательным. Маленький шаг каждый день.</p>
+        <button class="primary" id="startWorkout">Начать тренировку</button>
+      </section>
+
+      <section class="section">
+        <div class="section-title"><h2>Разделы</h2></div>
+        <div class="grid">
+          <button class="tile" data-tab="workouts"><strong>💪</strong><span>Тренировки</span></button>
+          <button class="tile" data-tab="schedule"><strong>📅</strong><span>Расписание</span></button>
+          <button class="tile" data-tab="progress"><strong>📈</strong><span>Прогресс</span></button>
+          <button class="tile" data-tab="nutrition"><strong>🥗</strong><span>Питание</span></button>
+        </div>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Основная навигация">
+      <button class="active" data-tab="home">⌂<span>Главная</span></button>
+      <button data-tab="workouts">💪<span>Тренировки</span></button>
+      <button data-tab="progress">📈<span>Прогресс</span></button>
+      <button data-tab="profile">👤<span>Профиль</span></button>
+    </nav>
+  </div>
+  <script src="./app.js"></script>
+</body>
+</html>
