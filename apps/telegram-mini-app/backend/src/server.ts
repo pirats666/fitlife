@@ -1,5 +1,8 @@
 import 'dotenv/config';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import cors from '@fastify/cors';
+import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
 import { validateTelegramInitData } from './telegram-auth.js';
 import { getUser, updateUser, upsertUser, completeWorkout, getWorkoutHistory, getTrainerClients, assignClient, getClientTrainer, isTrainer, isClientAssigned } from './store.js';
@@ -10,6 +13,10 @@ import { getClientSchedule, setClientSchedule } from './trainer.js';
 const app = Fastify({ logger: true });
 const configuredOrigin = process.env.WEBAPP_ORIGIN?.trim();
 await app.register(cors, { origin: configuredOrigin || true });
+
+const currentFile = fileURLToPath(import.meta.url);
+const webappRoot = path.resolve(path.dirname(currentFile), '../../webapp');
+await app.register(fastifyStatic, { root: webappRoot, prefix: '/' });
 
 async function authenticatedUser(initData: string | undefined) {
   if (!initData) return undefined;
@@ -107,4 +114,4 @@ app.get<{ Params: { clientId: string } }>('/api/users/:clientId/trainer', async 
 });
 
 const port = Number(process.env.PORT ?? 3000); const host = process.env.HOST ?? '0.0.0.0';
-app.listen({ port, host }).catch((error) => { app.log.error(error); process.exit(1); });
+await app.listen({ port, host });
