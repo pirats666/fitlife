@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: fitlife-backend
+    runtime: docker
+    dockerfilePath: ./apps/telegram-mini-app/backend/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TRAINER_TELEGRAM_IDS
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: WEBAPP_ORIGIN
+        sync: false
+      - key: PORT
+        value: "3000"
+      - key: HOST
+        value: "0.0.0.0"
+
+  - type: worker
+    name: fitlife-telegram-bot
+    runtime: docker
+    dockerfilePath: ./apps/telegram-mini-app/bot/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: FITLIFE_WEBAPP_URL
+        sync: false
