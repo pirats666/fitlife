@@ -14,7 +14,7 @@ h1,h2,p { margin:0; } h1 { font-size:24px; margin-top:4px; }
 .hero-card p { color:#a7a7a7; line-height:1.45; margin-bottom:20px; }
 .primary,.small-primary { border-radius:14px; background:#d8ff32; color:#0b0d0f; font-weight:800; }
 .primary { width:100%; padding:14px 16px; }
-.small-primary { padding:10px 14px; font-size:12px; }
+.small-primary { padding:10px 14px; font-size:12px; white-space:nowrap; }
 .section { margin-top:24px; }
 .section-title { margin-bottom:12px; }
 .section-title h2 { font-size:18px; }
@@ -23,8 +23,9 @@ h1,h2,p { margin:0; } h1 { font-size:24px; margin-top:4px; }
 .tile strong { font-size:25px; } .tile span { color:#ddd; font-size:14px; }
 .list-card,.profile-card,.stats { background:#15181b; border:1px solid #272b2f; border-radius:18px; padding:16px; margin-bottom:10px; }
 .list-card { display:flex; justify-content:space-between; align-items:center; gap:14px; }
-.list-card div { display:flex; flex-direction:column; gap:6px; }
-.list-card b { font-size:15px; } .list-card span { color:#92979c; font-size:12px; line-height:1.4; }
+.list-card div { display:flex; flex-direction:column; gap:6px; min-width:0; }
+.list-card b { font-size:15px; } .list-card span,.list-card small { color:#92979c; font-size:12px; line-height:1.4; }
+.list-card small { display:block; max-width:420px; }
 .status { color:#d8ff32 !important; white-space:nowrap; }
 .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
 .stats div { background:#0f1214; border-radius:14px; padding:14px 8px; text-align:center; }
@@ -32,6 +33,10 @@ h1,h2,p { margin:0; } h1 { font-size:24px; margin-top:4px; }
 .profile-card { display:flex; align-items:center; gap:14px; }
 .profile-avatar { width:50px; height:50px; border-radius:50%; display:grid; place-items:center; background:#24282c; font-size:22px; }
 .profile-card div:last-child { display:flex; flex-direction:column; gap:5px; }
+.goal-list { display:grid; gap:10px; }
+.goal { width:100%; text-align:left; padding:15px; background:#0f1214; border:1px solid #292d31; border-radius:14px; }
+.goal span { margin-left:8px; }
+.timer { font-size:64px; font-weight:800; text-align:center; margin:24px 0; letter-spacing:-.04em; }
 .bottom-nav { position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:min(520px,100%); display:grid; grid-template-columns:repeat(4,1fr); padding:10px 10px calc(10px + env(safe-area-inset-bottom)); background:rgba(13,15,17,.94); backdrop-filter:blur(14px); border-top:1px solid #24282c; z-index:10; }
 .bottom-nav button { background:transparent; color:#777; display:flex; flex-direction:column; align-items:center; gap:4px; font-size:18px; }
 .bottom-nav button span { font-size:10px; } .bottom-nav button.active { color:#d8ff32; }
