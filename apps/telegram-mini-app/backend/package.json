@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit",
     "start": "node dist/server.js"
   },
   "dependencies": {
