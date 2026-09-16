@@ -1,0 +1,37 @@
+name: FitLife CI
+
+on:
+  push:
+    branches:
+      - main
+      - feature/telegram-mini-app
+  pull_request:
+
+jobs:
+  backend:
+    name: Typecheck backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/telegram-mini-app/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm run typecheck
+
+  bot:
+    name: Typecheck Telegram bot
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/telegram-mini-app/bot
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npx tsc --noEmit
