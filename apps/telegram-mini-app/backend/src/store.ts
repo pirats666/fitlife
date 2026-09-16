@@ -8,7 +8,13 @@ export type FitLifeUser = TelegramUser & {
   updatedAt: string;
 };
 
+export type WorkoutHistoryItem = {
+  workoutId: string;
+  completedAt: string;
+};
+
 const users = new Map<number, FitLifeUser>();
+const workoutHistory = new Map<number, WorkoutHistoryItem[]>();
 
 export function upsertUser(telegramUser: TelegramUser): FitLifeUser {
   const now = new Date().toISOString();
@@ -39,4 +45,18 @@ export function updateUser(id: number, patch: Partial<Pick<FitLifeUser, 'goal' |
   const user = { ...existing, ...patch, updatedAt: new Date().toISOString() };
   users.set(id, user);
   return user;
+}
+
+export function completeWorkout(userId: number, workoutId: string): WorkoutHistoryItem[] | undefined {
+  if (!users.has(userId)) return undefined;
+
+  const history = workoutHistory.get(userId) ?? [];
+  history.unshift({ workoutId, completedAt: new Date().toISOString() });
+  workoutHistory.set(userId, history.slice(0, 100));
+  return workoutHistory.get(userId);
+}
+
+export function getWorkoutHistory(userId: number): WorkoutHistoryItem[] | undefined {
+  if (!users.has(userId)) return undefined;
+  return workoutHistory.get(userId) ?? [];
 }
