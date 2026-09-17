@@ -2,7 +2,7 @@ name: Telegram Mini App check
 
 on:
   push:
-    branches: [main, feature/telegram-mini-app]
+    branches: [main, feature/telegram-mini-app, feature/pavel-fitness-quiz]
   pull_request:
     branches: [main]
 
