@@ -9,6 +9,12 @@ export async function createQuizResult(telegramId: number, goal: QuizGoal, locat
   return data.id as string;
 }
 
+export async function getLatestQuizResult(telegramId: number) {
+  const { data, error } = await db.from('quiz_results').select('id,goal,location,experience,recommended_program,source,campaign,completed_at,program_downloaded_at').eq('telegram_id', telegramId).order('started_at', { ascending: false }).limit(1).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 export async function getProgramPdfUrl(slug: ProgramSlug) {
   const { data, error } = await db.from('programs').select('pdf_url').eq('slug', slug).eq('active', true).maybeSingle();
   if (error) throw error;
