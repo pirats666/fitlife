@@ -98,15 +98,18 @@ export async function handleTelegramUpdate(update: Update) {
     const experience = cb.data.split(':')[2] as QuizExperience;
     if (!Object.prototype.hasOwnProperty.call(experienceLabels, experience)) { await send(chatId, 'Выбери один из вариантов ниже 👇', experienceKeyboard); return; }
     session = updateQuizSession(id, { experience });
-    if (!session.goal || !session.location || !session.experience) { await send(chatId, 'Похоже, тест начался заново. Давай пройдём его ещё раз 👇', startKeyboard); return; }
-    const program = recommendProgram(session.location, session.experience);
+    const goal = session.goal;
+    const location = session.location;
+    const selectedExperience = session.experience;
+    if (!goal || !location || !selectedExperience) { await send(chatId, 'Похоже, тест начался заново. Давай пройдём его ещё раз 👇', startKeyboard); return; }
+    const program = recommendProgram(location, selectedExperience);
     session = updateQuizSession(id, { program });
-    const resultId = await createQuizResult(id, session.goal, session.location, session.experience, program, session.source, session.campaign);
+    const resultId = await createQuizResult(id, goal, location, selectedExperience, program, session.source, session.campaign);
     session = updateQuizSession(id, { resultId });
     await event(id, 'QUESTION_3', resultId, session.source, session.campaign);
     await event(id, 'TEST_COMPLETED', resultId, session.source, session.campaign);
     await event(id, 'RESULT_SHOWN', resultId, session.source, session.campaign);
-    await send(chatId, resultText(session.goal, session.location, session.experience, program), programKeyboard);
+    await send(chatId, resultText(goal, location, selectedExperience, program), programKeyboard);
     return;
   }
 
