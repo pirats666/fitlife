@@ -8,110 +8,34 @@ import { getUser, updateUser, upsertUser, completeWorkout, getWorkoutHistory, ge
 import { getWorkout, workouts } from './workouts.js';
 import { getWeeklySchedule } from './schedule.js';
 import { getClientSchedule, setClientSchedule } from './trainer.js';
+import { handleTelegramUpdate } from './telegram-quiz.js';
 
 const app = Fastify({ logger: true });
 const configuredOrigin = process.env.WEBAPP_ORIGIN?.trim();
 await app.register(cors, { origin: configuredOrigin || true });
-
-const webappRoot = process.env.NODE_ENV === 'production'
-  ? path.resolve(process.cwd(), 'webapp')
-  : path.resolve(process.cwd(), '../webapp');
+const webappRoot = process.env.NODE_ENV === 'production' ? path.resolve(process.cwd(), 'webapp') : path.resolve(process.cwd(), '../webapp');
 await app.register(fastifyStatic, { root: webappRoot, prefix: '/' });
 
-async function authenticatedUser(initData: string | undefined) {
-  if (!initData) return undefined;
-  try { return await upsertUser(validateTelegramInitData(initData, process.env.TELEGRAM_BOT_TOKEN ?? '')); }
-  catch { return undefined; }
-}
-function headerInitData(request: { headers: Record<string, string | string[] | undefined> }) {
-  const value = request.headers['x-telegram-init-data'];
-  return Array.isArray(value) ? value[0] : value;
-}
-async function trainerAuthorized(request: { headers: Record<string, string | string[] | undefined> }, trainerId: number) {
-  const authUser = await authenticatedUser(headerInitData(request));
-  return authUser?.id === trainerId && await isTrainer(trainerId);
-}
+async function authenticatedUser(initData: string | undefined) { if (!initData) return undefined; try { return await upsertUser(validateTelegramInitData(initData, process.env.TELEGRAM_BOT_TOKEN ?? '')); } catch { return undefined; } }
+function headerInitData(request: { headers: Record<string, string | string[] | undefined> }) { const value = request.headers['x-telegram-init-data']; return Array.isArray(value) ? value[0] : value; }
+async function trainerAuthorized(request: { headers: Record<string, string | string[] | undefined> }, trainerId: number) { const authUser = await authenticatedUser(headerInitData(request)); return authUser?.id === trainerId && await isTrainer(trainerId); }
 
 app.get('/health', async () => ({ ok: true, service: 'fitlife-telegram-backend', storage: 'supabase' }));
-app.post<{ Body: { initData?: string } }>('/api/auth/telegram', async (request, reply) => {
-  try { return { ok: true, user: await upsertUser(validateTelegramInitData(request.body?.initData ?? '', process.env.TELEGRAM_BOT_TOKEN ?? '')) }; }
-  catch (error) { return reply.code(401).send({ ok: false, error: error instanceof Error ? error.message : 'Unauthorized' }); }
-});
+app.post('/api/telegram/webhook', async (request, reply) => { try { await handleTelegramUpdate(request.body as Record<string, unknown>); return { ok: true }; } catch (error) { request.log.error(error); return reply.code(500).send({ ok: false, error: 'Telegram update failed' }); } });
+app.post('/api/auth/telegram', async (request: any, reply) => { try { return { ok: true, user: await upsertUser(validateTelegramInitData(request.body?.initData ?? '', process.env.TELEGRAM_BOT_TOKEN ?? '')) }; } catch (error) { return reply.code(401).send({ ok: false, error: error instanceof Error ? error.message : 'Unauthorized' }); } });
 app.get('/api/workouts', async () => ({ ok: true, workouts }));
-app.get<{ Params: { workoutId: string } }>('/api/workouts/:workoutId', async (request, reply) => {
-  const workout = getWorkout(request.params.workoutId);
-  if (!workout) return reply.code(404).send({ ok: false, error: 'Workout not found' });
-  return { ok: true, workout };
-});
-app.get<{ Params: { telegramId: string } }>('/api/users/:telegramId', async (request, reply) => {
-  const telegramId = Number(request.params.telegramId); const authUser = await authenticatedUser(headerInitData(request));
-  if (!Number.isSafeInteger(telegramId) || !authUser || authUser.id !== telegramId) return reply.code(403).send({ ok: false, error: 'Forbidden' });
-  const user = await getUser(telegramId); if (!user) return reply.code(404).send({ ok: false, error: 'User not found' }); return { ok: true, user };
-});
-app.patch<{ Params: { telegramId: string }; Body: { goal?: 'health' | 'strength' | 'fitness'; onboardingCompleted?: boolean } }>('/api/users/:telegramId', async (request, reply) => {
-  const telegramId = Number(request.params.telegramId); const authUser = await authenticatedUser(headerInitData(request));
-  if (!Number.isSafeInteger(telegramId) || !authUser || authUser.id !== telegramId) return reply.code(403).send({ ok: false, error: 'Forbidden' });
-  const user = await updateUser(telegramId, request.body ?? {}); if (!user) return reply.code(404).send({ ok: false, error: 'User not found' }); return { ok: true, user };
-});
-app.post<{ Params: { telegramId: string; workoutId: string } }>('/api/users/:telegramId/workouts/:workoutId/complete', async (request, reply) => {
-  const telegramId = Number(request.params.telegramId); const authUser = await authenticatedUser(headerInitData(request));
-  if (!Number.isSafeInteger(telegramId) || !authUser || authUser.id !== telegramId) return reply.code(403).send({ ok: false, error: 'Forbidden' });
-  if (!getWorkout(request.params.workoutId)) return reply.code(404).send({ ok: false, error: 'Workout not found' });
-  const history = await completeWorkout(telegramId, request.params.workoutId); if (!history) return reply.code(404).send({ ok: false, error: 'User not found' }); return { ok: true, history };
-});
-app.get<{ Params: { telegramId: string } }>('/api/users/:telegramId/workouts/history', async (request, reply) => {
-  const telegramId = Number(request.params.telegramId); const authUser = await authenticatedUser(headerInitData(request));
-  if (!Number.isSafeInteger(telegramId) || !authUser || authUser.id !== telegramId) return reply.code(403).send({ ok: false, error: 'Forbidden' });
-  const history = await getWorkoutHistory(telegramId); if (!history) return reply.code(404).send({ ok: false, error: 'User not found' }); return { ok: true, history };
-});
+app.get('/api/workouts/:workoutId', async (request: any, reply) => { const workout = getWorkout(request.params.workoutId); if (!workout) return reply.code(404).send({ ok: false, error: 'Workout not found' }); return { ok: true, workout }; });
+app.get('/api/users/:telegramId', async (request: any, reply) => { const telegramId = Number(request.params.telegramId); const authUser = await authenticatedUser(headerInitData(request)); if (!Number.isSafeInteger(telegramId) || !authUser || authUser.id !== telegramId) return reply.code(403).send({ ok: false, error: 'Forbidden' }); const user = await getUser(telegramId); if (!user) return reply.code(404).send({ ok: false, error: 'User not found' }); return { ok: true, user }; });
+app.patch('/api/users/:telegramId', async (request: any, reply) => { const telegramId = Number(request.params.telegramId); const authUser = await authenticatedUser(headerInitData(request)); if (!Number.isSafeInteger(telegramId) || !authUser || authUser.id !== telegramId) return reply.code(403).send({ ok: false, error: 'Forbidden' }); const user = await updateUser(telegramId, request.body ?? {}); if (!user) return reply.code(404).send({ ok: false, error: 'User not found' }); return { ok: true, user }; });
+app.post('/api/users/:telegramId/workouts/:workoutId/complete', async (request: any, reply) => { const telegramId = Number(request.params.telegramId); const authUser = await authenticatedUser(headerInitData(request)); if (!Number.isSafeInteger(telegramId) || !authUser || authUser.id !== telegramId) return reply.code(403).send({ ok: false, error: 'Forbidden' }); if (!getWorkout(request.params.workoutId)) return reply.code(404).send({ ok: false, error: 'Workout not found' }); const history = await completeWorkout(telegramId, request.params.workoutId); if (!history) return reply.code(404).send({ ok: false, error: 'User not found' }); return { ok: true, history }; });
+app.get('/api/users/:telegramId/workouts/history', async (request: any, reply) => { const telegramId = Number(request.params.telegramId); const authUser = await authenticatedUser(headerInitData(request)); if (!Number.isSafeInteger(telegramId) || !authUser || authUser.id !== telegramId) return reply.code(403).send({ ok: false, error: 'Forbidden' }); const history = await getWorkoutHistory(telegramId); if (!history) return reply.code(404).send({ ok: false, error: 'User not found' }); return { ok: true, history }; });
 app.get('/api/schedule', async () => ({ ok: true, schedule: getWeeklySchedule() }));
-app.get<{ Params: { telegramId: string } }>('/api/users/:telegramId/schedule', async (request, reply) => {
-  const telegramId = Number(request.params.telegramId); const authUser = await authenticatedUser(headerInitData(request));
-  if (!Number.isSafeInteger(telegramId) || !authUser || authUser.id !== telegramId) return reply.code(403).send({ ok: false, error: 'Forbidden' });
-  return { ok: true, schedule: await getClientSchedule(telegramId) };
-});
-app.get<{ Params: { telegramId: string } }>('/api/users/:telegramId/progress', async (request, reply) => {
-  const telegramId = Number(request.params.telegramId); const authUser = await authenticatedUser(headerInitData(request));
-  if (!Number.isSafeInteger(telegramId) || !authUser || authUser.id !== telegramId) return reply.code(403).send({ ok: false, error: 'Forbidden' });
-  const history = await getWorkoutHistory(telegramId); if (!history) return reply.code(404).send({ ok: false, error: 'User not found' });
-  const weekStart = new Date(); const day = weekStart.getDay() || 7; weekStart.setDate(weekStart.getDate() - day + 1); weekStart.setHours(0, 0, 0, 0);
-  return { ok: true, progress: { totalWorkouts: history.length, completedThisWeek: history.filter((item) => new Date(item.completedAt) >= weekStart).length, lastCompletedAt: history[0]?.completedAt ?? null } };
-});
-app.get<{ Querystring: { trainerId?: string } }>('/api/trainer/clients', async (request, reply) => {
-  const trainerId = Number(request.query.trainerId); if (!Number.isSafeInteger(trainerId) || !(await trainerAuthorized(request, trainerId))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
-  return { ok: true, clients: await getTrainerClients(trainerId) };
-});
-app.post<{ Body: { trainerId?: number; clientId?: number } }>('/api/trainer/clients/assign', async (request, reply) => {
-  const trainerId = Number(request.body?.trainerId); const clientId = Number(request.body?.clientId);
-  if (!Number.isSafeInteger(trainerId) || !Number.isSafeInteger(clientId) || !(await trainerAuthorized(request, trainerId))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
-  const assignment = await assignClient(trainerId, clientId); if (!assignment) return reply.code(400).send({ ok: false, error: 'Client assignment failed' }); return { ok: true, assignment };
-});
-app.get<{ Params: { trainerId: string; clientId: string } }>('/api/trainer/:trainerId/clients/:clientId/progress', async (request, reply) => {
-  const trainerId = Number(request.params.trainerId); const clientId = Number(request.params.clientId);
-  if (!Number.isSafeInteger(trainerId) || !Number.isSafeInteger(clientId) || !(await trainerAuthorized(request, trainerId))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
-  if (!(await isClientAssigned(trainerId, clientId))) return reply.code(403).send({ ok: false, error: 'Client is not assigned to this trainer' });
-  return { ok: true, client: await getUser(clientId), history: await getWorkoutHistory(clientId) ?? [] };
-});
-app.get<{ Params: { trainerId: string; clientId: string } }>('/api/trainer/:trainerId/clients/:clientId/schedule', async (request, reply) => {
-  const trainerId = Number(request.params.trainerId); const clientId = Number(request.params.clientId);
-  if (!Number.isSafeInteger(trainerId) || !Number.isSafeInteger(clientId) || !(await trainerAuthorized(request, trainerId))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
-  if (!(await isClientAssigned(trainerId, clientId))) return reply.code(403).send({ ok: false, error: 'Client is not assigned to this trainer' });
-  return { ok: true, schedule: await getClientSchedule(clientId) };
-});
-app.put<{ Params: { trainerId: string; clientId: string }; Body: { schedule?: Array<{ day: number; workoutId: string | null }> } }>('/api/trainer/:trainerId/clients/:clientId/schedule', async (request, reply) => {
-  const trainerId = Number(request.params.trainerId); const clientId = Number(request.params.clientId);
-  if (!Number.isSafeInteger(trainerId) || !Number.isSafeInteger(clientId) || !(await trainerAuthorized(request, trainerId))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
-  try {
-    const schedule = await setClientSchedule(trainerId, clientId, request.body?.schedule ?? [], workouts);
-    if (!schedule) return reply.code(403).send({ ok: false, error: 'Client is not assigned to this trainer' });
-    return { ok: true, schedule };
-  } catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Invalid schedule' }); }
-});
-app.get<{ Params: { clientId: string } }>('/api/users/:clientId/trainer', async (request, reply) => {
-  const clientId = Number(request.params.clientId); const authUser = await authenticatedUser(headerInitData(request));
-  if (!Number.isSafeInteger(clientId) || !authUser || authUser.id !== clientId) return reply.code(403).send({ ok: false, error: 'Forbidden' });
-  return { ok: true, trainer: await getClientTrainer(clientId) ?? null };
-});
-
-const port = Number(process.env.PORT ?? 3000); const host = process.env.HOST ?? '0.0.0.0';
-await app.listen({ port, host });
+app.get('/api/users/:telegramId/schedule', async (request: any, reply) => { const telegramId = Number(request.params.telegramId); const authUser = await authenticatedUser(headerInitData(request)); if (!Number.isSafeInteger(telegramId) || !authUser || authUser.id !== telegramId) return reply.code(403).send({ ok: false, error: 'Forbidden' }); return { ok: true, schedule: await getClientSchedule(telegramId) }; });
+app.get('/api/users/:telegramId/progress', async (request: any, reply) => { const telegramId = Number(request.params.telegramId); const authUser = await authenticatedUser(headerInitData(request)); if (!Number.isSafeInteger(telegramId) || !authUser || authUser.id !== telegramId) return reply.code(403).send({ ok: false, error: 'Forbidden' }); const history = await getWorkoutHistory(telegramId); if (!history) return reply.code(404).send({ ok: false, error: 'User not found' }); return { ok: true, progress: { totalWorkouts: history.length, lastCompletedAt: history[0]?.completedAt ?? null } }; });
+app.get('/api/trainer/clients', async (request: any, reply) => { const trainerId = Number(request.query.trainerId); if (!Number.isSafeInteger(trainerId) || !(await trainerAuthorized(request, trainerId))) return reply.code(403).send({ ok: false, error: 'Trainer access required' }); return { ok: true, clients: await getTrainerClients(trainerId) }; });
+app.post('/api/trainer/clients/assign', async (request: any, reply) => { const trainerId = Number(request.body?.trainerId); const clientId = Number(request.body?.clientId); if (!Number.isSafeInteger(trainerId) || !Number.isSafeInteger(clientId) || !(await trainerAuthorized(request, trainerId))) return reply.code(403).send({ ok: false, error: 'Trainer access required' }); const assignment = await assignClient(trainerId, clientId); if (!assignment) return reply.code(400).send({ ok: false, error: 'Client assignment failed' }); return { ok: true, assignment }; });
+app.get('/api/trainer/:trainerId/clients/:clientId/progress', async (request: any, reply) => { const trainerId = Number(request.params.trainerId); const clientId = Number(request.params.clientId); if (!Number.isSafeInteger(trainerId) || !Number.isSafeInteger(clientId) || !(await trainerAuthorized(request, trainerId))) return reply.code(403).send({ ok: false, error: 'Trainer access required' }); if (!(await isClientAssigned(trainerId, clientId))) return reply.code(403).send({ ok: false, error: 'Client is not assigned to this trainer' }); return { ok: true, client: await getUser(clientId), history: await getWorkoutHistory(clientId) ?? [] }; });
+app.get('/api/trainer/:trainerId/clients/:clientId/schedule', async (request: any, reply) => { const trainerId = Number(request.params.trainerId); const clientId = Number(request.params.clientId); if (!Number.isSafeInteger(trainerId) || !Number.isSafeInteger(clientId) || !(await trainerAuthorized(request, trainerId))) return reply.code(403).send({ ok: false, error: 'Trainer access required' }); if (!(await isClientAssigned(trainerId, clientId))) return reply.code(403).send({ ok: false, error: 'Client is not assigned to this trainer' }); return { ok: true, schedule: await getClientSchedule(clientId) }; });
+app.put('/api/trainer/:trainerId/clients/:clientId/schedule', async (request: any, reply) => { const trainerId = Number(request.params.trainerId); const clientId = Number(request.params.clientId); if (!Number.isSafeInteger(trainerId) || !Number.isSafeInteger(clientId) || !(await trainerAuthorized(request, trainerId))) return reply.code(403).send({ ok: false, error: 'Trainer access required' }); try { const schedule = await setClientSchedule(trainerId, clientId, request.body?.schedule ?? [], workouts); if (!schedule) return reply.code(403).send({ ok: false, error: 'Client is not assigned to this trainer' }); return { ok: true, schedule }; } catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Invalid schedule' }); } });
+app.get('/api/users/:clientId/trainer', async (request: any, reply) => { const clientId = Number(request.params.clientId); const authUser = await authenticatedUser(headerInitData(request)); if (!Number.isSafeInteger(clientId) || !authUser || authUser.id !== clientId) return reply.code(403).send({ ok: false, error: 'Forbidden' }); return { ok: true, trainer: await getClientTrainer(clientId) ?? null }; });
+const port = Number(process.env.PORT ?? 3000); const host = process.env.HOST ?? '0.0.0.0'; await app.listen({ port, host });
