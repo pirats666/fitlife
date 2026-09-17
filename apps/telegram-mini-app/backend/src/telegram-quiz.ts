@@ -1,4 +1,4 @@
-import { createQuizResult, event, getProgramPdfUrl, markProgramDownloaded, markProgramRequested, markTrainerClicked } from './quiz-store.js';
+import { createQuizResult, event, getLatestQuizResult, getProgramPdfUrl, markProgramDownloaded, markProgramRequested, markTrainerClicked } from './quiz-store.js';
 import { getQuizAdminStats, formatQuizAdminStats } from './quiz-admin.js';
 import { upsertUser } from './store.js';
 import { goalLabels, locationLabels, experienceLabels, goalRecommendation, recommendProgram, type QuizExperience, type QuizGoal, type QuizLocation } from './quiz.js';
@@ -21,7 +21,8 @@ async function telegram(method: string, body: Record<string, unknown>) {
 async function send(chatId: number, text: string, replyMarkup?: InlineKeyboard) { return telegram('sendMessage', { chat_id: chatId, text, reply_markup: replyMarkup }); }
 async function answerCallback(id: string) { await telegram('answerCallbackQuery', { callback_query_id: id }); }
 function parseStart(text: string) { const payload = text.split(/\s+/, 2)[1] ?? ''; const params = new URLSearchParams(payload); return { source: params.get('source') ?? (payload && !payload.includes('=') ? payload : undefined), campaign: params.get('campaign') ?? undefined }; }
-function resultText(goal: QuizGoal, location: QuizLocation, experience: QuizExperience, program: string) { const title = program === 'three_day_split' ? '3-DAY SPLIT — 3 тренировки в неделю' : program === 'full_body_home' ? 'FULL BODY HOME' : program === 'outdoor_full_body' ? 'OUTDOOR FULL BODY' : 'FULL BODY — старт для новичка'; return `🎯 ТВОЯ СТАРТОВАЯ ТОЧКА\n\nЦель: ${goalLabels[goal]}\nМесто: ${locationLabels[location]}\nУровень: ${experienceLabels[experience]}\n\nТебе сейчас подойдёт:\n${title}\n\n${goalRecommendation(goal)}\n\nНе нужно начинать с огромного количества упражнений или тренироваться каждый день. Важнее выстроить регулярность и постепенно прогрессировать.\n\nЯ подготовил для тебя готовую программу.`; }
+function programTitle(program: string) { return program === 'three_day_split' ? '3-DAY SPLIT — 3 тренировки в неделю' : program === 'full_body_home' ? 'FULL BODY HOME' : program === 'outdoor_full_body' ? 'OUTDOOR FULL BODY' : 'FULL BODY — старт для новичка'; }
+function resultText(goal: QuizGoal, location: QuizLocation, experience: QuizExperience, program: string) { return `🎯 ТВОЯ СТАРТОВАЯ ТОЧКА\n\nЦель: ${goalLabels[goal]}\nМесто: ${locationLabels[location]}\nУровень: ${experienceLabels[experience]}\n\nТебе сейчас подойдёт:\n${programTitle(program)}\n\n${goalRecommendation(goal)}\n\nНе нужно начинать с огромного количества упражнений или тренироваться каждый день. Важнее выстроить регулярность и постепенно прогрессировать.\n\nЯ подготовил для тебя готовую программу.`; }
 
 async function ensureUser(user: TelegramFrom | undefined, fallbackId: number) {
   if (!user) return;
@@ -35,23 +36,24 @@ export async function handleTelegramUpdate(update: Update) {
     const id = message.chat.id;
     await ensureUser(message.from, id);
     const adminId = Number(process.env.ADMIN_TELEGRAM_ID);
-    if (!Number.isSafeInteger(adminId) || id !== adminId) {
-      await send(id, '⛔ Доступ запрещён.');
-      return;
-    }
-    try {
-      const stats = await getQuizAdminStats();
-      await send(id, formatQuizAdminStats(stats));
-    } catch (error) {
-      console.error('Admin stats error:', error);
-      await send(id, 'Не удалось получить статистику. Проверь настройки Supabase.');
-    }
+    if (!Number.isSafeInteger(adminId) || id !== adminId) { await send(id, '⛔ Доступ запрещён.'); return; }
+    try { await send(id, formatQuizAdminStats(await getQuizAdminStats())); } catch (error) { console.error('Admin stats error:', error); await send(id, 'Не удалось получить статистику. Проверь настройки Supabase.'); }
     return;
   }
   if (message?.text?.startsWith('/start')) {
     const id = message.chat.id;
     await ensureUser(message.from, id);
     const { source, campaign } = parseStart(message.text);
+    const previous = await getLatestQuizResult(id);
+    if (previous) {
+      const sourceToKeep = source ?? previous.source ?? undefined;
+      const campaignToKeep = campaign ?? previous.campaign ?? undefined;
+      clearQuizSession(id);
+      startQuiz(id, sourceToKeep, campaignToKeep);
+      await event(id, 'START', previous.id, sourceToKeep, campaignToKeep);
+      await send(id, `Ты уже проходил тест 👋\n\nТвоя предыдущая рекомендация:\n${programTitle(previous.recommended_program)}\n\nХочешь пройти тест заново?`, { inline_keyboard: [[{ text: '🔄 ПРОЙТИ ЗАНОВО', callback_data: 'quiz:restart' }], [{ text: '📄 МОЯ ПРОГРАММА', callback_data: 'quiz:my_program' }]] });
+      return;
+    }
     startQuiz(id, source, campaign);
     await event(id, 'START', undefined, source, campaign);
     await send(id, 'Привет! 👋 Я помогу тебе определить, с чего лучше начать тренировки.\n\nВсего 3 вопроса — цель, место тренировок и твой опыт.\nВ конце ты получишь направление тренировок и подходящую стартовую программу.\n\nЗаймёт около минуты.\n👇 Давай начнём.', startKeyboard);
@@ -72,22 +74,27 @@ export async function handleTelegramUpdate(update: Update) {
     await send(chatId, 'Вопрос 1 из 3\n\nКакая у тебя главная цель сейчас?', goalKeyboard);
     return;
   }
+  if (cb.data === 'quiz:my_program') {
+    const previous = await getLatestQuizResult(id);
+    if (!previous) { await send(chatId, 'Пока нет сохранённой программы. Пройди тест 👇', startKeyboard); return; }
+    const pdfUrl = await getProgramPdfUrl(previous.recommended_program as Parameters<typeof getProgramPdfUrl>[0]);
+    if (!pdfUrl) { await send(chatId, 'Кажется, программа временно недоступна. Попробуй ещё раз через минуту.'); return; }
+    try { await telegram('sendDocument', { chat_id: chatId, document: pdfUrl, caption: 'Готово 💪\nВот твоя сохранённая программа.' }); }
+    catch { await send(chatId, 'Кажется, программа временно недоступна. Попробуй ещё раз через минуту.'); }
+    return;
+  }
   if (!session) { await send(chatId, 'Эта кнопка больше не актуальна. Давай начнём заново 👇', startKeyboard); return; }
   if (cb.data.startsWith('quiz:goal:')) {
     const goal = cb.data.slice('quiz:goal:'.length) as QuizGoal;
     if (!(goal in goalLabels)) return;
-    updateQuizSession(id, { goal });
-    await event(id, 'QUESTION_1', session.resultId, session.source, session.campaign);
-    await send(chatId, 'Отлично 👍\n\nВопрос 2 из 3\n\nГде ты планируешь тренироваться?', locationKeyboard);
-    return;
+    updateQuizSession(id, { goal }); await event(id, 'QUESTION_1', session.resultId, session.source, session.campaign);
+    await send(chatId, 'Отлично 👍\n\nВопрос 2 из 3\n\nГде ты планируешь тренироваться?', locationKeyboard); return;
   }
   if (cb.data.startsWith('quiz:location:')) {
     const location = cb.data.slice('quiz:location:'.length) as QuizLocation;
     if (!(location in locationLabels)) return;
-    updateQuizSession(id, { location });
-    await event(id, 'QUESTION_2', session.resultId, session.source, session.campaign);
-    await send(chatId, 'Понял 👍\n\nВопрос 3 из 3\n\nКакой у тебя сейчас опыт тренировок?', experienceKeyboard);
-    return;
+    updateQuizSession(id, { location }); await event(id, 'QUESTION_2', session.resultId, session.source, session.campaign);
+    await send(chatId, 'Понял 👍\n\nВопрос 3 из 3\n\nКакой у тебя сейчас опыт тренировок?', experienceKeyboard); return;
   }
   if (cb.data.startsWith('quiz:experience:')) {
     const experience = cb.data.slice('quiz:experience:'.length) as QuizExperience;
@@ -95,26 +102,16 @@ export async function handleTelegramUpdate(update: Update) {
     const program = recommendProgram(session.location, experience);
     const resultId = await createQuizResult(id, session.goal, session.location, experience, program, session.source, session.campaign);
     updateQuizSession(id, { experience, program, resultId });
-    await event(id, 'QUESTION_3', resultId, session.source, session.campaign);
-    await event(id, 'TEST_COMPLETED', resultId, session.source, session.campaign);
-    await event(id, 'RESULT_SHOWN', resultId, session.source, session.campaign);
-    await send(chatId, resultText(session.goal, session.location, experience, program), programKeyboard);
-    return;
+    await event(id, 'QUESTION_3', resultId, session.source, session.campaign); await event(id, 'TEST_COMPLETED', resultId, session.source, session.campaign); await event(id, 'RESULT_SHOWN', resultId, session.source, session.campaign);
+    await send(chatId, resultText(session.goal, session.location, experience, program), programKeyboard); return;
   }
   if (cb.data === 'quiz:program') {
     if (!session.resultId || !session.program) return;
     const pdfUrl = await getProgramPdfUrl(session.program);
     if (!pdfUrl) { await send(chatId, 'Кажется, программа временно недоступна. Попробуй ещё раз через минуту.'); return; }
-    await markProgramRequested(session.resultId);
-    await event(id, 'PROGRAM_REQUESTED', session.resultId, session.source, session.campaign);
-    try {
-      await telegram('sendDocument', { chat_id: chatId, document: pdfUrl, caption: 'Готово 💪\nВот твоя стартовая программа. Используй её как основу и постепенно прогрессируй по нагрузке.' });
-      await markProgramDownloaded(session.resultId);
-      await event(id, 'PROGRAM_DOWNLOADED', session.resultId, session.source, session.campaign);
-      await send(chatId, 'Хочешь следующий шаг? 👇\n\nЯ могу помочь подобрать программу уже под твою конкретную ситуацию, а не просто дать общий план.', afterProgramKeyboard);
-    } catch {
-      await send(chatId, 'Кажется, программа временно недоступна. Попробуй ещё раз через минуту.');
-    }
+    await markProgramRequested(session.resultId); await event(id, 'PROGRAM_REQUESTED', session.resultId, session.source, session.campaign);
+    try { await telegram('sendDocument', { chat_id: chatId, document: pdfUrl, caption: 'Готово 💪\nВот твоя стартовая программа. Используй её как основу и постепенно прогрессируй по нагрузке.' }); await markProgramDownloaded(session.resultId); await event(id, 'PROGRAM_DOWNLOADED', session.resultId, session.source, session.campaign); await send(chatId, 'Хочешь следующий шаг? 👇\n\nЯ могу помочь подобрать программу уже под твою конкретную ситуацию, а не просто дать общий план.', afterProgramKeyboard); }
+    catch { await send(chatId, 'Кажется, программа временно недоступна. Попробуй ещё раз через минуту.'); }
     return;
   }
   if (cb.data === 'quiz:trainer') {
@@ -122,6 +119,5 @@ export async function handleTelegramUpdate(update: Update) {
     const username = process.env.TRAINER_TELEGRAM_USERNAME?.replace(/^@/, '');
     if (username) await send(chatId, 'Отлично 💪\n\nНапиши мне пару слов:\n1. Какая у тебя цель?\n2. Где тренируешься?\n3. Что сейчас больше всего мешает прогрессу?\n\nЯ посмотрю твою ситуацию и подскажу, с чего начать.', { inline_keyboard: [[{ text: '💬 ОТКРЫТЬ TELEGRAM', url: `https://t.me/${username}` }]] });
     else await send(chatId, 'Отлично 💪\n\nНапиши следующим сообщением свою цель, место тренировок и что сейчас мешает прогрессу.');
-    return;
   }
 }
