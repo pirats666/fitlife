@@ -10,7 +10,7 @@ export async function createQuizResult(telegramId: number, goal: QuizGoal, locat
 }
 
 export async function getLatestQuizResult(telegramId: number) {
-  const { data, error } = await db.from('quiz_results').select('id,goal,location,experience,recommended_program,source,campaign,completed_at,program_downloaded_at').eq('telegram_id', telegramId).order('started_at', { ascending: false }).limit(1).maybeSingle();
+  const { data, error } = await db.from('quiz_results').select('id,goal,location,experience,recommended_program,source,campaign,completed_at,program_downloaded_at').eq('telegram_id', telegramId).order('completed_at', { ascending: false, nullsFirst: false }).order('started_at', { ascending: false }).limit(1).maybeSingle();
   if (error) throw error;
   return data;
 }
