@@ -1,4 +1,5 @@
 import { createQuizResult, event, getProgramPdfUrl, markProgramDownloaded, markProgramRequested, markTrainerClicked } from './quiz-store.js';
+import { getQuizAdminStats, formatQuizAdminStats } from './quiz-admin.js';
 import { upsertUser } from './store.js';
 import { goalLabels, locationLabels, experienceLabels, goalRecommendation, recommendProgram, type QuizExperience, type QuizGoal, type QuizLocation } from './quiz.js';
 import { afterProgramKeyboard, experienceKeyboard, goalKeyboard, locationKeyboard, programKeyboard, startKeyboard } from './quiz-keyboards.js';
@@ -30,6 +31,23 @@ async function ensureUser(user: TelegramFrom | undefined, fallbackId: number) {
 
 export async function handleTelegramUpdate(update: Update) {
   const message = update.message;
+  if (message?.text?.startsWith('/admin')) {
+    const id = message.chat.id;
+    await ensureUser(message.from, id);
+    const adminId = Number(process.env.ADMIN_TELEGRAM_ID);
+    if (!Number.isSafeInteger(adminId) || id !== adminId) {
+      await send(id, '⛔ Доступ запрещён.');
+      return;
+    }
+    try {
+      const stats = await getQuizAdminStats();
+      await send(id, formatQuizAdminStats(stats));
+    } catch (error) {
+      console.error('Admin stats error:', error);
+      await send(id, 'Не удалось получить статистику. Проверь настройки Supabase.');
+    }
+    return;
+  }
   if (message?.text?.startsWith('/start')) {
     const id = message.chat.id;
     await ensureUser(message.from, id);
@@ -85,10 +103,10 @@ export async function handleTelegramUpdate(update: Update) {
   }
   if (cb.data === 'quiz:program') {
     if (!session.resultId || !session.program) return;
-    await markProgramRequested(session.resultId);
-    await event(id, 'PROGRAM_REQUESTED', session.resultId, session.source, session.campaign);
     const pdfUrl = await getProgramPdfUrl(session.program);
     if (!pdfUrl) { await send(chatId, 'Кажется, программа временно недоступна. Попробуй ещё раз через минуту.'); return; }
+    await markProgramRequested(session.resultId);
+    await event(id, 'PROGRAM_REQUESTED', session.resultId, session.source, session.campaign);
     try {
       await telegram('sendDocument', { chat_id: chatId, document: pdfUrl, caption: 'Готово 💪\nВот твоя стартовая программа. Используй её как основу и постепенно прогрессируй по нагрузке.' });
       await markProgramDownloaded(session.resultId);
