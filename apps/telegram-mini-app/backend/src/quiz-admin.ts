@@ -5,9 +5,9 @@ const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!url || !key) throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
 const db: SupabaseClient = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 
-async function count(table: string, column?: string, value?: string) {
+async function count(table: string, column?: string) {
   let query = db.from(table).select('*', { count: 'exact', head: true });
-  if (column && value !== undefined) query = query.eq(column, value);
+  if (column) query = query.not(column, 'is', null);
   const { count: result, error } = await query;
   if (error) throw error;
   return result ?? 0;
@@ -16,9 +16,9 @@ async function count(table: string, column?: string, value?: string) {
 export async function getQuizAdminStats() {
   const [users, testsCompleted, programDownloads, trainerClicks] = await Promise.all([
     count('users'),
-    count('quiz_results', 'completed_at', undefined),
-    count('quiz_results', 'program_downloaded_at', undefined),
-    count('quiz_results', 'trainer_clicked_at', undefined),
+    count('quiz_results', 'completed_at'),
+    count('quiz_results', 'program_downloaded_at'),
+    count('quiz_results', 'trainer_clicked_at'),
   ]);
 
   const { data: goals, error: goalsError } = await db.from('quiz_results').select('goal');
@@ -51,4 +51,26 @@ export async function getQuizAdminStats() {
     programs: tally(programs ?? [], 'recommended_program'),
     sources: sourceTally(sources ?? []),
   };
+}
+
+export function formatQuizAdminStats(stats: Awaited<ReturnType<typeof getQuizAdminStats>>) {
+  const section = (title: string, values: Record<string, number>) => {
+    const entries = Object.entries(values).sort((a, b) => b[1] - a[1]);
+    return `${title}\n${entries.length ? entries.map(([key, value]) => `• ${key}: ${value}`).join('\n') : '• пока нет данных'}`;
+  };
+
+  return [
+    '📊 Pavel Fitness — статистика',
+    '',
+    `👥 Пользователи: ${stats.users}`,
+    `✅ Тесты завершены: ${stats.testsCompleted}`,
+    `📥 Программы скачаны: ${stats.programDownloads}`,
+    `💬 Переходы к тренеру: ${stats.trainerClicks}`,
+    '',
+    section('🎯 Цели', stats.goals),
+    '',
+    section('📄 Программы', stats.programs),
+    '',
+    section('🔗 Источники / кампании', stats.sources),
+  ].join('\n');
 }
