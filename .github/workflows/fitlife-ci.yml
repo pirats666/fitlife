@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feature/telegram-mini-app
+      - feature/pavel-fitness-quiz
   pull_request:
 
 jobs:
