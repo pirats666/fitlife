@@ -99,6 +99,7 @@ export async function handleTelegramUpdate(update: Update) {
       source = previous.source ?? undefined;
       campaign = previous.campaign ?? undefined;
     }
+    if (!resultId || !program) { await send(chatId, 'Пока нет сохранённой программы. Пройди тест 👇', startKeyboard); return; }
     const pdfUrl = await getProgramPdfUrl(program);
     if (!pdfUrl) { await send(chatId, 'Кажется, программа временно недоступна. Попробуй ещё раз через минуту.'); return; }
     await markProgramRequested(resultId); await event(id, 'PROGRAM_REQUESTED', resultId, source, campaign);
