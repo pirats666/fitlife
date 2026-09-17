@@ -2,7 +2,7 @@ name: FitLife Telegram Mini App
 
 on:
   push:
-    branches: [main, feature/telegram-mini-app]
+    branches: [main, feature/telegram-mini-app, feature/pavel-fitness-quiz]
     paths:
       - 'apps/telegram-mini-app/**'
       - '.github/workflows/fitlife-telegram-mini-app.yml'
