@@ -4,6 +4,8 @@ import { getPool, initProject2Db } from './project2-db.js';
 function authorized(request: any) {
   const expected = process.env.PROJECT2_ADMIN_TOKEN?.trim();
   return Boolean(expected && request.headers['x-project2-admin-token'] === expected);
+  app.post('/api/project2/crm/clients/:id/logs',async(request)=>{await initProject2Db();const id=String((request.params as any).id),b:any=request.body||{};const {rows}=await getPool().query('INSERT INTO project2_training_logs(client_id,program_id,exercise_id,set_number,weight_kg,reps,rpe,duration_seconds,completed,note) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *',[id,b.program_id||null,b.exercise_id||null,b.set_number==null?null:Number(b.set_number),b.weight_kg==null?null:Number(b.weight_kg),b.reps==null?null:Number(b.reps),b.rpe==null?null:Number(b.rpe),b.duration_seconds==null?null:Number(b.duration_seconds),b.completed!==false,b.note||null]);return{ok:true,log:rows[0]};});
+  app.get('/api/project2/crm/clients/:id/progress',async(request)=>{await initProject2Db();const id=String((request.params as any).id);const {rows}=await getPool().query('SELECT * FROM project2_training_logs WHERE client_id=$1 ORDER BY performed_on DESC LIMIT 100',[id]);const rpe=rows.filter(x=>x.rpe!=null).slice(0,4);const avg=rpe.length?rpe.reduce((s,x)=>s+Number(x.rpe),0)/rpe.length:null;const recommendation=avg==null?'Собрать данные по RPE':avg>=9?'Рассмотреть снижение нагрузки':avg<=6?'Рассмотреть увеличение нагрузки':'Сохранить текущую нагрузку';return{ok:true,logs:rows,summary:{average_recent_rpe:avg,recommendation}};});
 }
 
 export async function registerProject2Crm(app: FastifyInstance) {
