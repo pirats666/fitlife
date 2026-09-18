@@ -1,5 +1,5 @@
 import { createQuizResult, event, getLatestQuizResult, getProgramPdfUrl, markProgramDownloaded, markProgramRequested } from './quiz-store.js';
-import { adminMenuText, formatQuizAdminLeads, formatQuizAdminOverview, formatQuizAdminPrograms, formatQuizAdminSources, getQuizAdminStats, getRecentLeads } from './quiz-admin.js';
+import { adminMenuText, formatQuizAdminLeads, formatQuizAdminOverview, formatQuizAdminPrograms, formatQuizAdminSources, getQuizAdminStats, getRecentLeads, getSourcePerformance } from './quiz-admin.js';
 import { upsertUser } from './store.js';
 import { goalLabels, locationLabels, experienceLabels, goalRecommendation, recommendProgram, type QuizExperience, type QuizGoal, type QuizLocation } from './quiz.js';
 import { afterProgramKeyboard, experienceKeyboard, goalKeyboard, locationKeyboard, programKeyboard, startKeyboard } from './quiz-keyboards.js';
@@ -108,7 +108,7 @@ export async function handleTelegramUpdate(update: Update) {
       if (cb.data === 'admin:overview') await send(chatId, formatQuizAdminOverview(await getQuizAdminStats()), adminKeyboard);
       else if (cb.data === 'admin:leads') await send(chatId, formatQuizAdminLeads(await getRecentLeads()), adminKeyboard);
       else if (cb.data === 'admin:programs') await send(chatId, formatQuizAdminPrograms(await getQuizAdminStats()), adminKeyboard);
-      else if (cb.data === 'admin:sources') await send(chatId, formatQuizAdminSources(await getQuizAdminStats()), adminKeyboard);
+      else if (cb.data === 'admin:sources') { const stats = await getQuizAdminStats(); const sourcePerformance = await getSourcePerformance(); await send(chatId, formatQuizAdminSources(stats, sourcePerformance), adminKeyboard); }
       else await send(chatId, adminMenuText, adminKeyboard);
     } catch (error) {
       console.error('Admin panel error:', error);
