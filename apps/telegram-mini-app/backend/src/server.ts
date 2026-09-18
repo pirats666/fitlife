@@ -17,6 +17,7 @@ import { getClientTrainingSessions, logTrainingSession } from './training-sessio
 import { getClientProgress } from './client-progress.js';
 import { listClientMeasurements, createClientMeasurement } from './measurements.js';
 import { listClientNutritionPlans, createClientNutritionPlan, setNutritionPlanStatus } from './nutrition.js';
+import { listClientPayments, createClientPayment, updatePaymentUsage } from './payments.js';
 
 
 
@@ -173,6 +174,24 @@ app.patch<{ Params: { clientId: string; planId: string }; Body: { status: 'draft
   if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
   try { return { ok: true, plan: await setNutritionPlanStatus(request.params.clientId, request.params.planId, request.body.status) }; }
   catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Invalid nutrition status' }); }
+});
+app.get<{ Params: { clientId: string } }>('/api/trainer/crm/clients/:clientId/payments', async (request, reply) => {
+  const authUser = await authenticatedUser(headerInitData(request));
+  if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
+  try { return { ok: true, payments: await listClientPayments(request.params.clientId) }; }
+  catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Failed to load payments' }); }
+});
+app.post<{ Params: { clientId: string }; Body: Record<string, unknown> }>('/api/trainer/crm/clients/:clientId/payments', async (request, reply) => {
+  const authUser = await authenticatedUser(headerInitData(request));
+  if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
+  try { return { ok: true, payment: await createClientPayment(request.params.clientId, request.body ?? {}) }; }
+  catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Invalid payment' }); }
+});
+app.patch<{ Params: { clientId: string; paymentId: string }; Body: { sessions_used: number } }>('/api/trainer/crm/clients/:clientId/payments/:paymentId/usage', async (request, reply) => {
+  const authUser = await authenticatedUser(headerInitData(request));
+  if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
+  try { return { ok: true, payment: await updatePaymentUsage(request.params.clientId, request.params.paymentId, request.body.sessions_used) }; }
+  catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Invalid payment usage' }); }
 });
 app.get('/api/schedule', async () => ({ ok: true, schedule: getWeeklySchedule() }));
 app.get<{ Params: { telegramId: string } }>('/api/users/:telegramId/schedule', async (request, reply) => { const telegramId = Number(request.params.telegramId); const authUser = await authenticatedUser(headerInitData(request)); if (!Number.isSafeInteger(telegramId) || !authUser || authUser.id !== telegramId) return reply.code(403).send({ ok: false, error: 'Forbidden' }); return { ok: true, schedule: await getClientSchedule(telegramId) }; });
