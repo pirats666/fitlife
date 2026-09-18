@@ -277,18 +277,28 @@ export function formatQuizAdminSources(stats: Awaited<ReturnType<typeof getQuizA
 function leadStatusLabel(status: string) {
   return status === 'in_progress' ? '🟡 В РАБОТЕ' : status === 'closed' ? '✅ ЗАКРЫТА' : status === 'not_relevant' ? '❌ НЕ АКТУАЛЬНО' : '🆕 НОВАЯ';
 }
+export function formatQuizAdminLeadCard(lead: Awaited<ReturnType<typeof getRecentLeads>>[number], index: number) {
+  return [
+    `🎯 ЗАЯВКА #${index + 1}`,
+    '',
+    `👤 ${lead.name}`,
+    `📱 Telegram: ${lead.username}`,
+    `🆔 ID: ${lead.telegramId}`,
+    '',
+    `🎯 Цель: ${lead.goal}`,
+    `📍 Место: ${lead.location}`,
+    `📈 Опыт: ${lead.experience}`,
+    `🏋️ Программа: ${lead.program}`,
+    `🔗 Источник: ${lead.source}`,
+    '',
+    `📌 Статус: ${leadStatusLabel(lead.status)}`,
+    lead.createdAt ? `🕒 Дата: ${new Date(lead.createdAt).toLocaleString('ru-RU')}` : '',
+  ].filter(Boolean).join('\n');
+}
+
 export function formatQuizAdminLeads(leads: Awaited<ReturnType<typeof getRecentLeads>>) {
   if (!leads.length) return '🎯 ПОСЛЕДНИЕ ЗАЯВКИ\n\nПока заявок нет.';
-  return ['🎯 ПОСЛЕДНИЕ ЗАЯВКИ', '', ...leads.map((lead, index) => [
-    `#${index + 1} ${lead.name} ${lead.username}`,
-    `🆔 ${lead.telegramId}`,
-    `${lead.goal} • ${lead.location}`,
-    `📈 ${lead.experience}`,
-    `🏋️ ${lead.program}`,
-    `🔗 ${lead.source}`,
-    `📌 Статус: ${leadStatusLabel(lead.status)}`,
-    lead.createdAt ? `🕒 ${new Date(lead.createdAt).toLocaleString('ru-RU')}` : '',
-  ].filter(Boolean).join('\n')).join('\n\n')].join('\n');
+  return `🎯 ПОСЛЕДНИЕ ЗАЯВКИ\n\nНайдено заявок: ${leads.length}\n\nНиже каждая заявка отдельной карточкой 👇`;
 }
 
 export const adminMenuText = 'Выбери раздел админ-панели 👇';
