@@ -14,7 +14,7 @@ import { createTrainingProgram, getTrainingProgram } from './programs.js';
 import { generateProgramDraft } from './program-generator.js';
 import { listClientPrograms, setProgramStatus } from './program-list.js';
 import { getClientTrainingSessions, logTrainingSession } from './training-sessions.js';
-import { getClientProgress } from './client-progress.js';
+import { getClientProgress } from './client-progress.js';\nimport { analyzeClientTrainingResults } from './program-adjustments.js';
 import { listClientMeasurements, createClientMeasurement } from './measurements.js';
 import { listClientNutritionPlans, createClientNutritionPlan, setNutritionPlanStatus } from './nutrition.js';
 import { listClientPayments, createClientPayment, updatePaymentUsage } from './payments.js';
@@ -139,6 +139,12 @@ app.post<{ Params: { clientId: string }; Body: { workout_day_id: string; perform
   if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
   try { return { ok: true, session: await logTrainingSession(request.params.clientId, request.body) }; }
   catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Invalid training session' }); }
+});
+app.get<{ Params: { clientId: string } }>('/api/trainer/crm/clients/:clientId/program-adjustment', async (request, reply) => {
+  const authUser = await authenticatedUser(headerInitData(request));
+  if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
+  try { return { ok: true, adjustments: await analyzeClientTrainingResults(request.params.clientId) }; }
+  catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Failed to analyze program results' }); }
 });
 app.get<{ Params: { clientId: string } }>('/api/trainer/crm/clients/:clientId/progress', async (request, reply) => {
   const authUser = await authenticatedUser(headerInitData(request));
