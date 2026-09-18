@@ -4,6 +4,10 @@ export type ClientProfile = {
   equipment?: string[] | null; training_days_per_week?: number | null;
   session_duration_minutes?: number | null; movement_limitations?: string | null;
 };
+
+export type TrainingAspect = "hypertrophy" | "strength" | "endurance" | "maintenance" | "general_fitness" | "weight_management";
+export type MuscleGroup = "quadriceps" | "glutes" | "hamstrings" | "calves" | "chest" | "lats" | "upper_back" | "shoulders" | "biceps" | "triceps" | "core" | "cardio";
+
 export type ProgramDraft = {
   name: string; goal: string | null; rationale: string;
   days: Array<{ day_number:number; title:string; notes:string; exercises:Array<{
@@ -11,68 +15,30 @@ export type ProgramDraft = {
   }> }>;
 };
 
-type Template = { name:string; tags:string[]; focus:string; equipment?:string[]; blocked?:string[] };
-const templates: Template[] = [
- {name:"Приседание с собственным весом",tags:["home","street","gym"],focus:"legs",blocked:["колен","тазобедрен","голеностоп"]},
- {name:"Отжимания",tags:["home","street","gym"],focus:"chest",blocked:["плеч","запяст","локт"]},
- {name:"Тяга верхнего блока",tags:["gym"],focus:"back",equipment:["блок","кроссовер","тренажер"],blocked:["плеч","локт"]},
- {name:"Good Morning без веса",tags:["home","street","gym"],focus:"back",blocked:["поясниц","спин"]},
- {name:"Выпады назад",tags:["home","street","gym"],focus:"legs",blocked:["колен","тазобедрен","голеностоп"]},
- {name:"Жим гантелей лёжа",tags:["gym","home"],focus:"chest",equipment:["гантел"],blocked:["плеч","локт"]},
- {name:"Тяга гантели в наклоне",tags:["gym","home"],focus:"back",equipment:["гантел"],blocked:["поясниц","спин"]},
- {name:"Жим гантелей вверх",tags:["gym","home"],focus:"shoulders",equipment:["гантел"],blocked:["плеч","локт"]},
- {name:"Dead Bug",tags:["home","street","gym"],focus:"core"},
- {name:"Ходьба быстрым темпом",tags:["home","street","gym"],focus:"cardio"}
+type Template = { name:string; tags:string[]; muscleGroups:MuscleGroup[]; focus:string; equipment?:string[]; blocked?:string[]; aspects:TrainingAspect[] };
+const templates:Template[] = [
+ {name:"Приседание с собственным весом",tags:["home","street","gym"],muscleGroups:["quadriceps","glutes"],focus:"legs",blocked:["колен","тазобедрен","голеностоп"],aspects:["hypertrophy","strength","endurance","maintenance","general_fitness","weight_management"]},
+ {name:"Отжимания",tags:["home","street","gym"],muscleGroups:["chest","triceps","shoulders"],focus:"chest",blocked:["плеч","запяст","локт"],aspects:["hypertrophy","strength","endurance","maintenance","general_fitness","weight_management"]},
+ {name:"Тяга верхнего блока",tags:["gym"],muscleGroups:["lats","upper_back","biceps"],focus:"back",equipment:["блок","кроссовер","тренажер"],blocked:["плеч","локт"],aspects:["hypertrophy","strength","endurance","maintenance","general_fitness"]},
+ {name:"Good Morning без веса",tags:["home","street","gym"],muscleGroups:["hamstrings","glutes","upper_back"],focus:"back",blocked:["поясниц","спин"],aspects:["hypertrophy","strength","endurance","maintenance","general_fitness"]},
+ {name:"Выпады назад",tags:["home","street","gym"],muscleGroups:["quadriceps","glutes","hamstrings"],focus:"legs",blocked:["колен","тазобедрен","голеностоп"],aspects:["hypertrophy","strength","endurance","maintenance","general_fitness","weight_management"]},
+ {name:"Жим гантелей лёжа",tags:["gym","home"],muscleGroups:["chest","triceps","shoulders"],focus:"chest",equipment:["гантел"],blocked:["плеч","локт"],aspects:["hypertrophy","strength","maintenance"]},
+ {name:"Тяга гантели в наклоне",tags:["gym","home"],muscleGroups:["lats","upper_back","biceps"],focus:"back",equipment:["гантел"],blocked:["поясниц","спин"],aspects:["hypertrophy","strength","maintenance"]},
+ {name:"Жим гантелей вверх",tags:["gym","home"],muscleGroups:["shoulders","triceps"],focus:"shoulders",equipment:["гантел"],blocked:["плеч","локт"],aspects:["hypertrophy","strength","maintenance"]},
+ {name:"Dead Bug",tags:["home","street","gym"],muscleGroups:["core"],focus:"core",aspects:["endurance","maintenance","general_fitness"]},
+ {name:"Ходьба быстрым темпом",tags:["home","street","gym"],muscleGroups:["cardio"],focus:"cardio",aspects:["endurance","maintenance","general_fitness","weight_management"]}
 ];
 
-function locationKey(location?:string|null) {
- const v=(location??"").toLowerCase();
- if(v.includes("зал")||v.includes("gym")) return "gym";
- if(v.includes("улиц")||v.includes("street")||v.includes("площад")) return "street";
- if(v.includes("дом")||v.includes("home")) return "home";
- return "home";
-}
-function matchesEquipment(e:Template,p:ClientProfile) {
- if(!e.equipment?.length) return true;
- const have=(p.equipment??[]).map(x=>x.toLowerCase());
- return e.equipment.some(req=>have.some(x=>x.includes(req)));
-}
-function allowed(e:Template,p:ClientProfile) {
- const limits=(p.movement_limitations??"").toLowerCase();
- return e.tags.includes(locationKey(p.training_location)) && matchesEquipment(e,p)
-   && !(e.blocked??[]).some(x=>limits.includes(x));
-}
-function exercisesFor(p:ClientProfile) {
- const pool=templates.filter(e=>allowed(e,p));
- const goal=(p.goal??"").toLowerCase();
- const preferred = goal.includes("сил") ? ["legs","back","chest","shoulders","core"] : ["legs","chest","back","shoulders","core"];
- const picked:string[]=[];
- for(const focus of preferred) {
-   const e=pool.find(x=>x.focus===focus && !picked.includes(x.name));
-   if(e) picked.push(e.name);
- }
- return picked;
-}
-function volume(p:ClientProfile) {
- const beginner=(p.training_experience??"").toLowerCase().includes("нович");
- return {sets:beginner?2:3,reps:beginner?"8-12":"8-15",rest:90};
-}
-export function generateProgramDraft(profile:ClientProfile):ProgramDraft {
- const daysCount=Math.min(6,Math.max(1,Number(profile.training_days_per_week)||3));
- const v=volume(profile); const base=exercisesFor(profile);
- const days=Array.from({length:daysCount},(_,i)=>({
-  day_number:i+1,title:`Тренировка ${i+1} — Full Body`,
-  notes:"Черновик: тренер проверяет ограничения, технику и объём перед назначением.",
-  exercises:base.map(name=>({exercise_name:name,sets:v.sets,reps:v.reps,rest_seconds:v.rest,
-   coach_comment:"Проверить технику, доступное оборудование и переносимость."}))
- }));
- return {name:`Программа для ${profile.first_name}`,goal:profile.goal??null,
-  rationale:[
-   profile.goal?`Цель: ${profile.goal}.`:"Цель не указана.",
-   profile.training_experience?`Опыт: ${profile.training_experience}.`:"",
-   profile.training_location?`Место: ${profile.training_location}.`:"",
-   profile.training_days_per_week?`Частота: ${profile.training_days_per_week} раз/неделю.`:"",
-   profile.session_duration_minutes?`Длительность: около ${profile.session_duration_minutes} минут.`:"",
-   base.length? `Подбор: ${base.length} упражнений с учётом профиля.`:"Подходящих упражнений не найдено — требуется ручной подбор."
-  ].filter(Boolean).join(" "),days};
-}
+function locationKey(location?:string|null) { const v=(location??"").toLowerCase(); if(v.includes("зал")||v.includes("gym")) return "gym"; if(v.includes("улиц")||v.includes("street")||v.includes("площад")) return "street"; if(v.includes("дом")||v.includes("home")) return "home"; return "home"; }
+function matchesEquipment(e:Template,p:ClientProfile) { if(!e.equipment?.length) return true; const have=(p.equipment??[]).map(x=>x.toLowerCase()); return e.equipment.some(req=>have.some(x=>x.includes(req))); }
+function allowed(e:Template,p:ClientProfile) { const limits=(p.movement_limitations??"").toLowerCase(); return e.tags.includes(locationKey(p.training_location)) && matchesEquipment(e,p) && !(e.blocked??[]).some(x=>limits.includes(x)); }
+
+function detectAspect(p:ClientProfile):TrainingAspect { const text=[p.goal??"",p.goal_details??""].join(" ").toLowerCase(); if(/гипертроф|мышечн.*мас|набор.*мас|массу/.test(text)) return "hypertrophy"; if(/сил[а-я]*|максимальн.*сил/.test(text)) return "strength"; if(/вынослив|кардио|аэроб/.test(text)) return "endurance"; if(/поддержан|сохранен|тонус/.test(text)) return "maintenance"; if(/сниж|похуд|жир|вес/.test(text)) return "weight_management"; return "general_fitness"; }
+function exercisesFor(p:ClientProfile,aspect:TrainingAspect) { const pool=templates.filter(e=>allowed(e,p)&&e.aspects.includes(aspect)); const preferred=aspect==="strength"?["legs","back","chest","shoulders","core"]:aspect==="endurance"||aspect==="weight_management"?["legs","chest","back","shoulders","core","cardio"]:["legs","chest","back","shoulders","core"]; const picked:Template[]=[]; for(const focus of preferred){const e=pool.find(x=>x.focus===focus&&!picked.some(y=>y.name===x.name)); if(e)picked.push(e);} return picked; }
+function volume(p:ClientProfile,aspect:TrainingAspect){const beginner=(p.training_experience??"").toLowerCase().includes("нович"); if(aspect==="strength")return{sets:beginner?2:3,reps:beginner?"6-8":"5-8",rest:120}; if(aspect==="endurance"||aspect==="weight_management")return{sets:beginner?2:3,reps:beginner?"10-15":"12-20",rest:60}; if(aspect==="maintenance")return{sets:2,reps:"8-12",rest:90}; return{sets:beginner?2:3,reps:"8-12",rest:90}; }
+function exerciseLimit(minutes?:number|null){if(!minutes)return 6;if(minutes<=30)return 4;if(minutes<=45)return 5;return 6;}
+function progressionNote(aspect:TrainingAspect){if(aspect==="hypertrophy")return "Прогрессия: постепенно увеличивать рабочую нагрузку или усложнять вариант после стабильного выполнения заданного диапазона повторений."; if(aspect==="strength")return "Прогрессия: постепенно повышать нагрузку при сохранении техники, меняя один основной параметр за раз."; if(aspect==="endurance")return "Прогрессия: постепенно увеличивать объём работы или сокращать отдых при сохранении качества техники."; if(aspect==="maintenance")return "Поддержание: сохранять регулярность и контролируемый объём, корректируя его по фактической переносимости."; if(aspect==="weight_management")return "Прогрессия: приоритет регулярности и постепенному увеличению доступного объёма активности без резкого повышения нагрузки."; return "Прогрессия: постепенно менять один основной параметр нагрузки при сохранении техники."; }
+
+export function generateProgramDraft(profile:ClientProfile):ProgramDraft { const daysCount=Math.min(6,Math.max(1,Number(profile.training_days_per_week)||3)); const aspect=detectAspect(profile); const v=volume(profile,aspect); const selected=exercisesFor(profile,aspect).slice(0,exerciseLimit(profile.session_duration_minutes)); const days=Array.from({length:daysCount},(_,i)=>{const rotation=selected.length?i%selected.length:0; const ordered=selected.length?selected.map((_,index)=>selected[(index+rotation)%selected.length]):[]; return {day_number:i+1,title:`Тренировка ${i+1} — ${aspectLabel(aspect)}`,notes:`Аспект: ${aspectLabel(aspect)}. Группы мышц: ${ordered.map(e=>e.muscleGroups.map(muscleLabel).join("/" )).join(", ")||"требуется ручной подбор"}. ${progressionNote(aspect)} Черновик: тренер проверяет ограничения, технику и объём перед назначением.`,exercises:ordered.map((e,index)=>({exercise_name:e.name,sets:v.sets,reps:v.reps,rest_seconds:v.rest,coach_comment:`Группы: ${e.muscleGroups.map(muscleLabel).join(", ")}. Аспект: ${aspectLabel(aspect)}. Проверить технику, доступное оборудование и переносимость.${index===0?" Начинать с контролируемого темпа.":""}`}))};}); return {name:`Программа для ${profile.first_name}`,goal:profile.goal??null,rationale:[`Аспект: ${aspectLabel(aspect)}.`,profile.goal?`Цель: ${profile.goal}.`:"Цель не указана — выбран общий фитнес-профиль.",profile.training_experience?`Опыт: ${profile.training_experience}.`:"",profile.training_location?`Место: ${profile.training_location}.`:"",profile.training_days_per_week?`Частота: ${profile.training_days_per_week} раз/неделю.`:"",profile.session_duration_minutes?`Длительность: около ${profile.session_duration_minutes} минут; лимит — ${exerciseLimit(profile.session_duration_minutes)} упражнений за занятие.`:"",selected.length?`Подбор: ${selected.length} упражнений с учётом групп мышц, аспекта, профиля, оборудования и ограничений.`:"Подходящих упражнений не найдено — требуется ручной подбор.",progressionNote(aspect)].filter(Boolean).join(" "),days}; }
+function aspectLabel(aspect:TrainingAspect){return{hypertrophy:"Гипертрофия",strength:"Сила",endurance:"Выносливость",maintenance:"Поддержание",general_fitness:"Общая физическая подготовка",weight_management:"Снижение массы тела"}[aspect];}
+function muscleLabel(muscle:MuscleGroup){return{quadriceps:"квадрицепс",glutes:"ягодицы",hamstrings:"задняя поверхность бедра",calves:"икры",chest:"грудь",lats:"широчайшие",upper_back:"верх спины",shoulders:"плечи",biceps:"бицепс",triceps:"трицепс",core:"кор",cardio:"кардио"}[muscle];}
