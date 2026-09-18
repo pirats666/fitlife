@@ -17,4 +17,5 @@ CREATE INDEX IF NOT EXISTS idx_project2_calendar_date ON project2_calendar_event
 CREATE TABLE IF NOT EXISTS project2_nutrition_plans(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),name TEXT NOT NULL,goal TEXT,calories INTEGER,protein_g NUMERIC,fat_g NUMERIC,carbs_g NUMERIC,notes TEXT,status TEXT NOT NULL DEFAULT 'draft',created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS project2_nutrition_days(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),plan_id UUID NOT NULL REFERENCES project2_nutrition_plans(id) ON DELETE CASCADE,day_number INTEGER NOT NULL,title TEXT NOT NULL,meals TEXT);
 CREATE INDEX IF NOT EXISTS idx_project2_nutrition_plans_status ON project2_nutrition_plans(status);
+CREATE TABLE IF NOT EXISTS project2_settings(id INTEGER PRIMARY KEY DEFAULT 1,trainer_name TEXT,timezone TEXT DEFAULT 'Europe/Moscow',updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 `);initialized=true;} export{getPool};
