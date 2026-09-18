@@ -1,5 +1,5 @@
 import { createQuizResult, event, getLatestQuizResult, getLeadStatus, getProgramPdfUrl, markProgramDownloaded, markProgramRequested, setLeadStatus } from './quiz-store.js';
-import { adminMenuText, formatQuizAdminLeads, formatQuizAdminOverview, formatQuizAdminPrograms, formatQuizAdminSources, getQuizAdminStats, getRecentLeads, getSourcePerformance } from './quiz-admin.js';
+import { adminMenuText, formatQuizAdminLeadCard, formatQuizAdminLeads, formatQuizAdminOverview, formatQuizAdminPrograms, formatQuizAdminSources, getQuizAdminStats, getRecentLeads, getSourcePerformance } from './quiz-admin.js';
 import { upsertUser } from './store.js';
 import { goalLabels, locationLabels, experienceLabels, goalRecommendation, recommendProgram, type QuizExperience, type QuizGoal, type QuizLocation } from './quiz.js';
 import { afterProgramKeyboard, experienceKeyboard, goalKeyboard, locationKeyboard, programKeyboard, startKeyboard } from './quiz-keyboards.js';
@@ -122,13 +122,9 @@ export async function handleTelegramUpdate(update: Update) {
       else if (cb.data === 'admin:leads') {
         const leads = await getRecentLeads();
         await send(chatId, formatQuizAdminLeads(leads), adminKeyboard);
-        for (const lead of leads) {
+        for (const [index, lead] of leads.entries()) {
           if (!lead.resultId) continue;
-          await send(chatId, [
-            `🎯 ${lead.name} ${lead.username}`,
-            `🆔 ${lead.telegramId}`,
-            `📌 Статус: ${lead.status === 'in_progress' ? '🟡 В РАБОТЕ' : lead.status === 'closed' ? '✅ ЗАКРЫТА' : lead.status === 'not_relevant' ? '❌ НЕ АКТУАЛЬНО' : '🆕 НОВАЯ'}`,
-          ].join('\n'), leadStatusKeyboard(lead.resultId));
+          await send(chatId, formatQuizAdminLeadCard(lead, index), leadStatusKeyboard(lead.resultId));
         }
       }
       else if (cb.data.startsWith('admin:status:')) {
