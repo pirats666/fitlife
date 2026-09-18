@@ -11,7 +11,7 @@ import { getClientSchedule, setClientSchedule } from './trainer.js';
 import { handleTelegramUpdate } from './telegram-quiz.js';
 import { listCrmClients, getCrmClient, createCrmClient, updateCrmClient, addClientNote, addMeasurement, addPayment } from './crm.js';
 import { createTrainingProgram, getTrainingProgram } from './programs.js';
-import { generateProgramDraft } from './program-generator.js';
+import { generateProgramDraft, applyProgressionToDraft } from './program-generator.js';
 import { listClientPrograms, setProgramStatus } from './program-list.js';
 import { getClientTrainingSessions, logTrainingSession } from './training-sessions.js';
 import { getClientProgress } from './client-progress.js';\nimport { analyzeClientTrainingResults } from './program-adjustments.js';
@@ -109,7 +109,17 @@ app.post<{ Params: { clientId: string } }>('/api/trainer/crm/clients/:clientId/p
   if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
   const client = await getCrmClient(request.params.clientId);
   if (!client) return reply.code(404).send({ ok: false, error: 'Client not found' });
-  return { ok: true, draft: generateProgramDraft(client) };
+  const draft = generateProgramDraft(client);
+  const progression = await getExerciseProgression(request.params.clientId);
+  const signals = progression.map((item:any) => ({
+    exercise_name:item.exercise_name,
+    start_kg:item.start_kg,
+    current_kg:item.current_kg,
+    change_kg:item.change_kg,
+    trend:item.change_kg===null?'no_data':item.change_kg>0?'up':item.change_kg<0?'down':'stable',
+    recommendation:item.change_kg===null?'review':item.change_kg>0?'increase':'maintain'
+  }));
+  return { ok: true, draft: applyProgressionToDraft(draft, signals), progression: signals };
 });
 app.post<{ Params: { clientId: string }; Body: { name: string; goal?: string | null; starts_on?: string | null; ends_on?: string | null; rationale?: string | null; days: Array<{ day_number: number; title: string; notes?: string | null; exercises: Array<{ exercise_id?: string | null; exercise_name: string; sort_order?: number; sets?: number | null; reps?: string | null; working_weight?: number | null; rest_seconds?: number | null; tempo?: string | null; rpe?: number | null; rir?: number | null; coach_comment?: string | null; media_url?: string | null }> }> } }>('/api/trainer/crm/clients/:clientId/programs', async (request, reply) => {
   const authUser = await authenticatedUser(headerInitData(request));
