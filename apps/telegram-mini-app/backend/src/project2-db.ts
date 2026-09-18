@@ -6,4 +6,6 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE TABLE IF NOT EXISTS project2_trainer_programs(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),name TEXT NOT NULL,goal TEXT,description TEXT,status TEXT NOT NULL DEFAULT 'draft',created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS project2_trainer_days(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),program_id UUID NOT NULL REFERENCES project2_trainer_programs(id) ON DELETE CASCADE,day_number INTEGER NOT NULL,title TEXT NOT NULL,UNIQUE(program_id,day_number));
 CREATE TABLE IF NOT EXISTS project2_trainer_exercises(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),day_id UUID NOT NULL REFERENCES project2_trainer_days(id) ON DELETE CASCADE,exercise_name TEXT NOT NULL,sets INTEGER,reps TEXT,working_weight_kg NUMERIC,rest_seconds INTEGER,coach_comment TEXT,video_url TEXT,sort_order INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS project2_exercise_library(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),name TEXT NOT NULL,category TEXT,muscles TEXT,description TEXT,technique TEXT,video_url TEXT,gif_url TEXT,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE INDEX IF NOT EXISTS idx_project2_exercise_library_name ON project2_exercise_library(name);
 `);initialized=true;} export{getPool};
