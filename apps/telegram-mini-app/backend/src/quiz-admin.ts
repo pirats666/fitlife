@@ -183,7 +183,7 @@ export async function getRecentLeads(limit = 8) {
   let results: Array<Record<string, unknown>> = [];
   if (resultIds.length) {
     const { data, error } = await db.from('quiz_results')
-      .select('id, telegram_id, goal, location, experience, recommended_program, source, campaign, completed_at')
+      .select('id, telegram_id, goal, location, experience, recommended_program, source, campaign, completed_at, lead_status')
       .in('id', resultIds);
     if (error) throw error;
     results = data ?? [];
@@ -201,6 +201,7 @@ export async function getRecentLeads(limit = 8) {
     const user = usersById.get(telegramId);
     const result = event.quiz_result_id ? resultsById.get(String(event.quiz_result_id)) : undefined;
     return {
+      resultId: result?.id ? String(result.id) : undefined,
       telegramId,
       name: [user?.first_name, user?.last_name].filter(Boolean).join(' ') || 'Без имени',
       username: user?.username ? `@${user.username}` : 'не указан',
@@ -208,6 +209,7 @@ export async function getRecentLeads(limit = 8) {
       location: label(locationLabels, result?.location),
       experience: label(experienceLabels, result?.experience),
       program: label(programLabels, result?.recommended_program),
+      status: String(result?.lead_status ?? 'new'),
       source: result?.campaign ? `${result.source ?? 'organic'} / ${result.campaign}` : String(result?.source ?? 'organic'),
       createdAt: String(event.created_at ?? result?.completed_at ?? ''),
     };
@@ -268,6 +270,9 @@ export function formatQuizAdminSources(stats: Awaited<ReturnType<typeof getQuizA
   lines.push('━━━━━━━━━━━━━━━━━━');
   return lines.join('\n').trim();
 }
+function leadStatusLabel(status: string) {
+  return status === 'in_progress' ? '🟡 В РАБОТЕ' : status === 'closed' ? '✅ ЗАКРЫТА' : status === 'not_relevant' ? '❌ НЕ АКТУАЛЬНО' : '🆕 НОВАЯ';
+}
 export function formatQuizAdminLeads(leads: Awaited<ReturnType<typeof getRecentLeads>>) {
   if (!leads.length) return '🎯 ПОСЛЕДНИЕ ЗАЯВКИ\n\nПока заявок нет.';
   return ['🎯 ПОСЛЕДНИЕ ЗАЯВКИ', '', ...leads.map((lead, index) => [
@@ -277,6 +282,7 @@ export function formatQuizAdminLeads(leads: Awaited<ReturnType<typeof getRecentL
     `📈 ${lead.experience}`,
     `🏋️ ${lead.program}`,
     `🔗 ${lead.source}`,
+    `📌 Статус: ${leadStatusLabel(lead.status)}`,
     lead.createdAt ? `🕒 ${new Date(lead.createdAt).toLocaleString('ru-RU')}` : '',
   ].filter(Boolean).join('\n')).join('\n\n')].join('\n');
 }
