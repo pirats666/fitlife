@@ -151,7 +151,7 @@ export async function handleTelegramUpdate(update: Update) {
   if (cb.data === 'quiz:offer') {
     const previous = await getLatestQuizResult(id);
     if (!previous) { await send(chatId, 'Сначала пройди короткий тест 👇', startKeyboard); return; }
-    await event(id, 'OFFER_SHOWN', previous.id, previous.source ?? undefined, previous.campaign ?? undefined);
+    try { await event(id, 'OFFER_SHOWN', previous.id, previous.source ?? undefined, previous.campaign ?? undefined); } catch (error) { console.error('Offer tracking error:', error); }
     await send(chatId, '🎯 ИНДИВИДУАЛЬНАЯ РАБОТА\n\nТы уже получил стартовую программу. Следующий уровень — программа, составленная именно под тебя.\n\nЧто можно разобрать:\n• твоя цель и текущий уровень;\n• место и условия тренировок;\n• удобный график;\n• упражнения и их последовательность;\n• постепенное изменение нагрузки.\n\nЕсли хочешь обсудить такой формат — напиши мне. Я посмотрю твою ситуацию и расскажу, как можно построить работу.', { inline_keyboard: [[{ text: '💬 ОБСУДИТЬ С ТРЕНЕРОМ', callback_data: 'quiz:trainer' }], [{ text: '📄 ОСТАВИТЬСЯ НА СТАРТОВОЙ ПРОГРАММЕ', callback_data: 'quiz:my_program' }]] });
     return;
   }
@@ -166,7 +166,7 @@ export async function handleTelegramUpdate(update: Update) {
       source = previous?.source ?? undefined;
       campaign = previous?.campaign ?? undefined;
     }
-    if (resultId) { await markTrainerClicked(resultId); await event(id, 'TRAINER_CLICKED', resultId, source, campaign); }
+    if (resultId) { await markTrainerClicked(resultId); try { await event(id, 'TRAINER_CLICKED', resultId, source, campaign); } catch (error) { console.error('Trainer click tracking error:', error); } }
     const username = process.env.TRAINER_TELEGRAM_USERNAME?.replace(/^@/, '');
     const previous = await getLatestQuizResult(id);
     const goalText = previous ? goalLabels[previous.goal as QuizGoal] : 'не указана';
