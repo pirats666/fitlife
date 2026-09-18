@@ -33,7 +33,31 @@ async function telegram(method: string, body: Record<string, unknown>) {
 }
 async function send(chatId: number, text: string, replyMarkup?: InlineKeyboard) { return telegram('sendMessage', { chat_id: chatId, text, reply_markup: replyMarkup }); }
 async function answerCallback(id: string) { await telegram('answerCallbackQuery', { callback_query_id: id }); }
-function parseStart(text: string) { const payload = text.split(/\s+/, 2)[1] ?? ''; const params = new URLSearchParams(payload); return { source: params.get('source') ?? (payload && !payload.includes('=') ? payload : undefined), campaign: params.get('campaign') ?? undefined }; }
+function parseStart(text: string) {
+  const payload = text.split(/\s+/, 2)[1]?.trim() ?? '';
+  if (!payload) return { source: undefined, campaign: undefined };
+
+  // Telegram deep-link start payloads are limited to URL-safe characters,
+  // so marketing links use: <source>__<campaign>.
+  // Examples:
+  //   ?start=reels
+  //   ?start=reels__reels1
+  //   ?start=stories__open_workout
+  const [sourcePart, ...campaignParts] = payload.split('__');
+  const source = sourcePart || undefined;
+  const campaign = campaignParts.length ? campaignParts.join('__') || undefined : undefined;
+
+  // Keep backward compatibility with the previous query-string format.
+  if (payload.includes('=')) {
+    const params = new URLSearchParams(payload);
+    return {
+      source: params.get('source') ?? undefined,
+      campaign: params.get('campaign') ?? undefined,
+    };
+  }
+
+  return { source, campaign };
+}
 function programTitle(program: string) { return program === 'three_day_split' ? '3-DAY SPLIT — 3 тренировки в неделю' : program === 'full_body_home' ? 'FULL BODY HOME' : program === 'outdoor_full_body' ? 'OUTDOOR FULL BODY' : 'FULL BODY — старт для новичка'; }
 function resultText(goal: QuizGoal, location: QuizLocation, experience: QuizExperience, program: string) { return `🎯 ТВОЯ СТАРТОВАЯ ТОЧКА\n\nЦель: ${goalLabels[goal]}\nМесто: ${locationLabels[location]}\nУровень: ${experienceLabels[experience]}\n\nТебе сейчас подойдёт:\n${programTitle(program)}\n\n${goalRecommendation(goal)}\n\nНе нужно начинать с огромного количества упражнений или тренироваться каждый день. Важнее выстроить регулярность и постепенно прогрессировать.\n\nЯ подготовил для тебя готовую программу.\n\n👇 Забирай её — а после я покажу следующий шаг.`; }
 
