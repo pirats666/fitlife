@@ -153,6 +153,29 @@ if(event.target.closest('[data-save-generated-program]')){
  }catch(error){console.error(error);tg?.showAlert?.('Не удалось сохранить программу.');}
  return;
 }
+if(event.target.closest('[data-save-measurement]')){
+  const num=id=>{const v=Number(document.getElementById(id)?.value);return Number.isFinite(v)?v:null};
+  const body={measured_on:document.getElementById('mDate')?.value||new Date().toISOString().slice(0,10),body_weight_kg:num('mWeight'),body_fat_percent:num('mBodyFat'),chest_cm:num('mChest'),waist_cm:num('mWaist'),hips_cm:num('mHips'),arm_cm:num('mArm'),thigh_cm:num('mThigh'),notes:document.getElementById('mNotes')?.value?.trim()||null};
+  try{await api(`/api/trainer/crm/clients/${selectedCrmClient.id}/measurements`,{method:'POST',body:JSON.stringify(body)});tg?.showAlert?.('Измерение сохранено 📏');await renderTrainerClient(selectedCrmClient.id);}catch(error){console.error(error);tg?.showAlert?.('Не удалось сохранить измерение.');} return;
+}
+if(event.target.closest('[data-save-nutrition]')){
+  const body={name:document.getElementById('nName')?.value?.trim(),goal:document.getElementById('nGoal')?.value?.trim(),calories:Number(document.getElementById('nCalories')?.value)||null,protein_g:Number(document.getElementById('nProtein')?.value)||null,fat_g:Number(document.getElementById('nFat')?.value)||null,carbs_g:Number(document.getElementById('nCarbs')?.value)||null,starts_on:document.getElementById('nStart')?.value||null,ends_on:document.getElementById('nEnd')?.value||null,instructions:document.getElementById('nInstructions')?.value?.trim()||null};
+  if(!body.name){tg?.showAlert?.('Укажи название плана.');return}
+  try{await api(`/api/trainer/crm/clients/${selectedCrmClient.id}/nutrition`,{method:'POST',body:JSON.stringify(body)});tg?.showAlert?.('План питания сохранён 🥗');await renderTrainerClient(selectedCrmClient.id);}catch(error){console.error(error);tg?.showAlert?.('Не удалось сохранить план.');} return;
+}
+if(event.target.closest('[data-save-payment]')){
+  const body={amount:Number(document.getElementById('payAmount')?.value)||0,currency:document.getElementById('payCurrency')?.value?.trim()||'RUB',package_name:document.getElementById('payPackage')?.value?.trim()||null,sessions_purchased:Number(document.getElementById('paySessions')?.value)||0,valid_from:document.getElementById('payStart')?.value||null,valid_until:document.getElementById('payEnd')?.value||null,comment:document.getElementById('payComment')?.value?.trim()||null};
+  if(body.amount<=0){tg?.showAlert?.('Укажи сумму оплаты.');return}
+  try{await api(`/api/trainer/crm/clients/${selectedCrmClient.id}/payments`,{method:'POST',body:JSON.stringify(body)});tg?.showAlert?.('Оплата сохранена 💳');await renderTrainerClient(selectedCrmClient.id);}catch(error){console.error(error);tg?.showAlert?.('Не удалось сохранить оплату.');} return;
+}
+if(event.target.closest('[data-use-payment]')){
+  const btn=event.target.closest('[data-use-payment]'); const used=Number(btn.dataset.used)||0;
+  try{await api(`/api/trainer/crm/clients/${selectedCrmClient.id}/payments/${btn.dataset.usePayment}/usage`,{method:'PATCH',body:JSON.stringify({sessions_used:used+1})});tg?.showAlert?.('Тренировка отмечена как использованная ✅');await renderTrainerClient(selectedCrmClient.id);}catch(error){console.error(error);tg?.showAlert?.('Не удалось обновить использование.');} return;
+}
+if(event.target.closest('[data-save-note]')){
+  const note=document.getElementById('clientNote')?.value?.trim(); if(!note){tg?.showAlert?.('Напиши заметку.');return}
+  try{await api(`/api/trainer/crm/clients/${selectedCrmClient.id}/notes`,{method:'POST',body:JSON.stringify({note})});tg?.showAlert?.('Заметка добавлена 📝');await renderTrainerClient(selectedCrmClient.id);}catch(error){console.error(error);tg?.showAlert?.('Не удалось добавить заметку.');} return;
+}
 if(event.target.closest('[data-save-progression]')){
   const body={
     exercise_name:document.getElementById('progExerciseName')?.value?.trim(),
