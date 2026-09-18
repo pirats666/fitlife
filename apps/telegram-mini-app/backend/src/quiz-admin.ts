@@ -5,6 +5,12 @@ const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!url || !key) throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
 const db: SupabaseClient = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 
+async function countEvents(eventName: string) {
+  const { count: result, error } = await db.from('funnel_events').select('*', { count: 'exact', head: true }).eq('event_name', eventName);
+  if (error) throw error;
+  return result ?? 0;
+}
+
 async function count(table: string, column?: string) {
   let query = db.from(table).select('*', { count: 'exact', head: true });
   if (column) query = query.not(column, 'is', null);
@@ -14,10 +20,11 @@ async function count(table: string, column?: string) {
 }
 
 export async function getQuizAdminStats() {
-  const [users, testsCompleted, programDownloads, trainerClicks] = await Promise.all([
+  const [users, testsCompleted, programDownloads, offerShown, trainerClicks] = await Promise.all([
     count('users'),
     count('quiz_results', 'completed_at'),
     count('quiz_results', 'program_downloaded_at'),
+    countEvents('OFFER_SHOWN'),
     count('quiz_results', 'trainer_clicked_at'),
   ]);
 
@@ -46,6 +53,7 @@ export async function getQuizAdminStats() {
     users,
     testsCompleted,
     programDownloads,
+    offerShown,
     trainerClicks,
     goals: tally(goals ?? [], 'goal'),
     programs: tally(programs ?? [], 'recommended_program'),
@@ -65,6 +73,7 @@ export function formatQuizAdminStats(stats: Awaited<ReturnType<typeof getQuizAdm
     `👥 Пользователи: ${stats.users}`,
     `✅ Тесты завершены: ${stats.testsCompleted}`,
     `📥 Программы скачаны: ${stats.programDownloads}`,
+    `🎯 Оффер индивидуальной работы: ${stats.offerShown}`,
     `💬 Переходы к тренеру: ${stats.trainerClicks}`,
     '',
     section('🎯 Цели', stats.goals),
