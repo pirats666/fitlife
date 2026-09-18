@@ -243,20 +243,30 @@ export function formatQuizAdminPrograms(stats: Awaited<ReturnType<typeof getQuiz
 }
 export function formatQuizAdminSources(stats: Awaited<ReturnType<typeof getQuizAdminStats>>, sourcePerformance: Awaited<ReturnType<typeof getSourcePerformance>>) {
   if (!sourcePerformance.length) {
-    return ['🔗 ИСТОЧНИКИ И КАМПАНИИ', '', 'Пока нет данных по источникам.'].join('\\n');
+    return ['🔗 ИСТОЧНИКИ И КАМПАНИИ', '', 'Пока нет данных по источникам.'].join('\n');
   }
   const lines = ['🔗 ИСТОЧНИКИ И КАМПАНИИ', '', 'Воронка по каждому источнику:', ''];
   for (const item of sourcePerformance) {
     lines.push(
-      `🔗 ${item.source}`,
-      `🚀 Запуски: ${item.starts} | 👤 уникальных: ${item.uniqueStarts}`,
-      `✅ Тест: ${item.tests} | конверсия: ${item.startToTest}`,
-      `📥 Программа: ${item.downloads} | конверсия: ${item.testToDownload}`,
-      `🎯 Заявки: ${item.uniqueOffers} | конверсия: ${item.testToOffer}`,
+      '━━━━━━━━━━━━━━━━━━',
+      `🔗 ИСТОЧНИК: ${item.source}`,
+      '',
+      `🚀 Запуски: ${item.starts}`,
+      `👤 Уникальные: ${item.uniqueStarts}`,
+      '',
+      `✅ Тесты: ${item.tests}`,
+      `📊 Конверсия в тест: ${item.startToTest}`,
+      '',
+      `📥 Программы: ${item.downloads}`,
+      `📊 Конверсия в программу: ${item.testToDownload}`,
+      '',
+      `🎯 Заявки: ${item.uniqueOffers}`,
+      `📊 Конверсия в заявку: ${item.testToOffer}`,
       '',
     );
   }
-  return lines.join('\\n').trim();
+  lines.push('━━━━━━━━━━━━━━━━━━');
+  return lines.join('\n').trim();
 }
 export function formatQuizAdminLeads(leads: Awaited<ReturnType<typeof getRecentLeads>>) {
   if (!leads.length) return '🎯 ПОСЛЕДНИЕ ЗАЯВКИ\n\nПока заявок нет.';
