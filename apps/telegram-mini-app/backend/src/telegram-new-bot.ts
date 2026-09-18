@@ -35,11 +35,14 @@ async function saveProfile(id:number,user:User,s:Session){
   );
   return profileId;
 }
+
+async function sendActiveProgram(chatId:number){await initProject2Db();const {rows}=await getPool().query("SELECT p.* FROM project2_clients c JOIN project2_programs p ON p.id=c.active_program_id WHERE c.telegram_id=$1 AND p.status='active'",[chatId]);if(!rows[0]){await send(chatId,'📋 Активной программы пока нет. Тренер подготовит её и она появится здесь.');return;}const p=rows[0];const {rows:days}=await getPool().query('SELECT * FROM project2_workout_days WHERE program_id=$1 ORDER BY day_number',[p.id]);let out=`🏋️ ${p.name}\n\n🎯 Цель: ${p.goal||'—'}\n`;for(const d of days){out+=`\nДень ${d.day_number}: ${d.title}\n`;const ex=await getPool().query('SELECT * FROM project2_exercises WHERE workout_day_id=$1 ORDER BY sort_order,id',[d.id]);for(const e of ex.rows)out+=`• ${e.exercise_name} — ${e.sets??'—'}×${e.reps??'—'}${e.working_weight_kg!=null?` · ${e.working_weight_kg} кг`:''}${e.rest_seconds!=null?` · отдых ${e.rest_seconds}с`:''}\n`;}await send(chatId,out);}
 function summary(s:Session){return `🎯 Цель: ${s.goal}\n📈 Опыт: ${s.experience}\n📍 Место: ${s.location}\n📅 Тренировок: ${s.days}/нед.\n⏱ Время: ${s.duration} мин\n⚠️ Ограничения: ${s.limitations||'не указаны'}`;}
 
 export async function handleNewTelegramUpdate(update:Update){
  if(!token())throw new Error('NEW_TELEGRAM_BOT_TOKEN is required');
  const message=update.message;
+ if(message?.text?.startsWith('/program')){await sendActiveProgram(message.chat.id);return;}
  if(message?.text?.startsWith('/start')){const id=message.chat.id;sessions.set(id,{step:'goal'});await send(id,'Привет! 👋\n\nЯ помогу определить твою стартовую точку и собрать данные для персональной программы.\n\nЭто займёт несколько минут. Никаких сложных анкет.\n\nГотов начать?',start);return;}
  const cb=update.callback_query;if(cb?.data&&cb.message){const id=cb.from.id;await answer(cb.id);let s=sessions.get(id);
   if(cb.data==='new:start'){s={step:'goal'};sessions.set(id,s);await send(id,'Шаг 1 из 6\n\nКакая у тебя главная цель?',goals);return;}
