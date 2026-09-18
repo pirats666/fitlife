@@ -18,7 +18,7 @@ import { getClientProgress } from './client-progress.js';\nimport { analyzeClien
 import { listClientMeasurements, createClientMeasurement } from './measurements.js';
 import { listClientNutritionPlans, createClientNutritionPlan, setNutritionPlanStatus } from './nutrition.js';
 import { listClientPayments, createClientPayment, updatePaymentUsage } from './payments.js';
-import { listClientNotes, createClientNote } from './notes.js';
+import { listClientNotes, createClientNote } from './notes.js';\nimport { logExercisePerformance, getExerciseProgression } from './exercise-progression.js';
 
 
 
@@ -145,6 +145,18 @@ app.get<{ Params: { clientId: string } }>('/api/trainer/crm/clients/:clientId/pr
   if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
   try { return { ok: true, adjustments: await analyzeClientTrainingResults(request.params.clientId) }; }
   catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Failed to analyze program results' }); }
+});
+app.get<{ Params: { clientId: string } }>('/api/trainer/crm/clients/:clientId/exercise-progression', async (request, reply) => {
+  const authUser = await authenticatedUser(headerInitData(request));
+  if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
+  try { return { ok: true, progression: await getExerciseProgression(request.params.clientId) }; }
+  catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Failed to load exercise progression' }); }
+});
+app.post<{ Params: { clientId: string }; Body: Record<string, unknown> }>('/api/trainer/crm/clients/:clientId/exercise-progression', async (request, reply) => {
+  const authUser = await authenticatedUser(headerInitData(request));
+  if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
+  try { return { ok: true, performance: await logExercisePerformance({ client_id: request.params.clientId, ...(request.body ?? {}) } as any) }; }
+  catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Failed to save exercise performance' }); }
 });
 app.get<{ Params: { clientId: string } }>('/api/trainer/crm/clients/:clientId/progress', async (request, reply) => {
   const authUser = await authenticatedUser(headerInitData(request));
