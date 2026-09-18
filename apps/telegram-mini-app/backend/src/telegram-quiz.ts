@@ -1,5 +1,5 @@
 import { createQuizResult, event, getLatestQuizResult, getProgramPdfUrl, markProgramDownloaded, markProgramRequested } from './quiz-store.js';
-import { getQuizAdminStats, formatQuizAdminStats } from './quiz-admin.js';
+import { adminMenuText, formatQuizAdminLeads, formatQuizAdminOverview, formatQuizAdminPrograms, formatQuizAdminSources, getQuizAdminStats, getRecentLeads } from './quiz-admin.js';
 import { upsertUser } from './store.js';
 import { goalLabels, locationLabels, experienceLabels, goalRecommendation, recommendProgram, type QuizExperience, type QuizGoal, type QuizLocation } from './quiz.js';
 import { afterProgramKeyboard, experienceKeyboard, goalKeyboard, locationKeyboard, programKeyboard, startKeyboard } from './quiz-keyboards.js';
@@ -10,6 +10,19 @@ const api = () => `https://api.telegram.org/bot${token()}`;
 type TelegramFrom = { id: number; username?: string; first_name?: string; last_name?: string; language_code?: string };
 type Update = { message?: { chat: { id: number }; from?: TelegramFrom; text?: string }; callback_query?: { id: string; from: TelegramFrom; message?: { chat: { id: number }; message_id: number }; data?: string } };
 type InlineKeyboard = { inline_keyboard: Array<Array<{ text: string; callback_data?: string; url?: string }>> };
+
+const adminKeyboard: InlineKeyboard = { inline_keyboard: [
+  [{ text: '📊 ОБЩАЯ СТАТИСТИКА', callback_data: 'admin:overview' }],
+  [{ text: '🎯 ПОСЛЕДНИЕ ЗАЯВКИ', callback_data: 'admin:leads' }],
+  [{ text: '📄 ПРОГРАММЫ', callback_data: 'admin:programs' }],
+  [{ text: '🔗 ИСТОЧНИКИ', callback_data: 'admin:sources' }],
+  [{ text: '🔄 ОБНОВИТЬ', callback_data: 'admin:overview' }],
+] };
+
+function isAdmin(id: number) {
+  const adminId = Number(process.env.ADMIN_TELEGRAM_ID);
+  return Number.isSafeInteger(adminId) && id === adminId;
+}
 
 async function telegram(method: string, body: Record<string, unknown>) {
   if (!token()) throw new Error('TELEGRAM_BOT_TOKEN is required');
@@ -32,12 +45,11 @@ async function ensureUser(user: TelegramFrom | undefined, fallbackId: number) {
 
 export async function handleTelegramUpdate(update: Update) {
   const message = update.message;
-  if (message?.text?.startsWith('/admin')) {
+  if (message?.text?.startsWith('/admin') || message?.text?.startsWith('/stats')) {
     const id = message.chat.id;
     await ensureUser(message.from, id);
-    const adminId = Number(process.env.ADMIN_TELEGRAM_ID);
-    if (!Number.isSafeInteger(adminId) || id !== adminId) { await send(id, '⛔ Доступ запрещён.'); return; }
-    try { await send(id, formatQuizAdminStats(await getQuizAdminStats())); } catch (error) { console.error('Admin stats error:', error); await send(id, 'Не удалось получить статистику. Проверь настройки Supabase.'); }
+    if (!isAdmin(id)) { await send(id, '⛔ Доступ запрещён.'); return; }
+    await send(id, adminMenuText, adminKeyboard);
     return;
   }
   if (message?.text?.startsWith('/start')) {
@@ -65,6 +77,22 @@ export async function handleTelegramUpdate(update: Update) {
   const chatId = cb.message.chat.id;
   await ensureUser(cb.from, chatId);
   await answerCallback(cb.id);
+
+  if (cb.data.startsWith('admin:')) {
+    if (!isAdmin(id)) { await send(chatId, '⛔ Доступ запрещён.'); return; }
+    try {
+      if (cb.data === 'admin:overview') await send(chatId, formatQuizAdminOverview(await getQuizAdminStats()), adminKeyboard);
+      else if (cb.data === 'admin:leads') await send(chatId, formatQuizAdminLeads(await getRecentLeads()), adminKeyboard);
+      else if (cb.data === 'admin:programs') await send(chatId, formatQuizAdminPrograms(await getQuizAdminStats()), adminKeyboard);
+      else if (cb.data === 'admin:sources') await send(chatId, formatQuizAdminSources(await getQuizAdminStats()), adminKeyboard);
+      else await send(chatId, adminMenuText, adminKeyboard);
+    } catch (error) {
+      console.error('Admin panel error:', error);
+      await send(chatId, 'Не удалось загрузить раздел админ-панели. Проверь подключение к Supabase.', adminKeyboard);
+    }
+    return;
+  }
+
   let session = getQuizSession(id);
 
   if (cb.data === 'quiz:start' || cb.data === 'quiz:restart') {
