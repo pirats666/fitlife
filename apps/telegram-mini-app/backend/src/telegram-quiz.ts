@@ -152,7 +152,7 @@ export async function handleTelegramUpdate(update: Update) {
     const previous = await getLatestQuizResult(id);
     if (!previous) { await send(chatId, 'Сначала пройди короткий тест 👇', startKeyboard); return; }
     try { await event(id, 'OFFER_SHOWN', previous.id, previous.source ?? undefined, previous.campaign ?? undefined); } catch (error) { console.error('Offer tracking error:', error); }
-    await send(chatId, '🎯 ИНДИВИДУАЛЬНАЯ РАБОТА\n\nТы уже получил стартовую программу. Следующий уровень — программа, составленная именно под тебя.\n\nЧто можно разобрать:\n• твоя цель и текущий уровень;\n• место и условия тренировок;\n• удобный график;\n• упражнения и их последовательность;\n• постепенное изменение нагрузки.\n\nЕсли хочешь обсудить такой формат — напиши мне. Я посмотрю твою ситуацию и расскажу, как можно построить работу.', { inline_keyboard: [[{ text: '💬 ОБСУДИТЬ С ТРЕНЕРОМ', callback_data: 'quiz:trainer' }], [{ text: '📄 ОСТАВИТЬСЯ НА СТАРТОВОЙ ПРОГРАММЕ', callback_data: 'quiz:my_program' }]] });
+    await send(chatId, '🎯 ИНДИВИДУАЛЬНАЯ ПРОГРАММА\n\nЯ получил твой результат теста. Теперь могу подготовить следующий шаг с учётом твоей цели, места и опыта тренировок.\n\nЯ свяжусь с тобой лично и продолжим с учётом твоего результата.');
     return;
   }
 
