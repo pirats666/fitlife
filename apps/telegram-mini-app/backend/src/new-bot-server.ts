@@ -3,10 +3,12 @@ import Fastify from 'fastify';
 import { registerTelegramNewBotRoute } from './telegram-new-bot-route.js';
 import { initProject2Db } from './project2-db.js';
 import { registerProject2Crm } from './project2-crm.js';
+import { registerProject2Programs } from './project2-programs.js';
 
 const app = Fastify({ logger: true });
 await registerTelegramNewBotRoute(app);
 await registerProject2Crm(app);
+await registerProject2Programs(app);
 
 app.get('/', async () => ({
   ok: true,
