@@ -1,105 +1,14 @@
 import { Pool } from 'pg';
-
-let pool: Pool | undefined;
-let initialized = false;
-
-function getPool() {
-  const url = process.env.DATABASE_URL?.trim();
-  if (!url) throw new Error('DATABASE_URL is required for Project 2');
-  pool ??= new Pool({ connectionString: url, ssl: { rejectUnauthorized: false }, max: 5 });
-  return pool;
-}
-
-export async function initProject2Db() {
-  if (initialized) return;
-  await getPool().query(`
-    CREATE EXTENSION IF NOT EXISTS pgcrypto;
-    CREATE TABLE IF NOT EXISTS project2_clients (
-      id TEXT PRIMARY KEY,
-      telegram_id BIGINT NOT NULL UNIQUE,
-      username TEXT,
-      first_name TEXT,
-      last_name TEXT,
-      goal TEXT,
-      experience TEXT,
-      location TEXT,
-      days_per_week INTEGER,
-      duration_minutes INTEGER,
-      limitations TEXT,
-      status TEXT NOT NULL DEFAULT 'lead',
-      coach_notes TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS project2_programs (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      client_id TEXT NOT NULL REFERENCES project2_clients(id) ON DELETE CASCADE,
-      name TEXT NOT NULL,
-      goal TEXT,
-      status TEXT NOT NULL DEFAULT 'draft',
-      starts_on DATE,
-      ends_on DATE,
-      rationale TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS project2_workout_days (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      program_id UUID NOT NULL REFERENCES project2_programs(id) ON DELETE CASCADE,
-      day_number INTEGER NOT NULL,
-      title TEXT NOT NULL,
-      UNIQUE(program_id, day_number)
-    );
-    CREATE TABLE IF NOT EXISTS project2_exercises (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      workout_day_id UUID NOT NULL REFERENCES project2_workout_days(id) ON DELETE CASCADE,
-      exercise_name TEXT NOT NULL,
-      sets INTEGER,
-      reps TEXT,
-      working_weight_kg NUMERIC,
-      rest_seconds INTEGER,
-      coach_comment TEXT,
-      video_url TEXT,
-      sort_order INTEGER NOT NULL DEFAULT 0
-    );
-    CREATE TABLE IF NOT EXISTS project2_measurements (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      client_id TEXT NOT NULL REFERENCES project2_clients(id) ON DELETE CASCADE,
-      measured_on DATE NOT NULL,
-      body_weight_kg NUMERIC,
-      body_fat_percent NUMERIC,
-      chest_cm NUMERIC,
-      waist_cm NUMERIC,
-      hips_cm NUMERIC,
-      arm_cm NUMERIC,
-      thigh_cm NUMERIC,
-      notes TEXT
-    );
-    CREATE TABLE IF NOT EXISTS project2_notes (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      client_id TEXT NOT NULL REFERENCES project2_clients(id) ON DELETE CASCADE,
-      note TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS project2_payments (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      client_id TEXT NOT NULL REFERENCES project2_clients(id) ON DELETE CASCADE,
-      amount NUMERIC NOT NULL DEFAULT 0,
-      currency TEXT NOT NULL DEFAULT 'RUB',
-      package_name TEXT,
-      sessions_purchased INTEGER NOT NULL DEFAULT 0,
-      sessions_used INTEGER NOT NULL DEFAULT 0,
-      valid_from DATE,
-      valid_until DATE,
-      comment TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE INDEX IF NOT EXISTS idx_project2_programs_client ON project2_programs(client_id);
-    CREATE INDEX IF NOT EXISTS idx_project2_notes_client ON project2_notes(client_id);
-    CREATE INDEX IF NOT EXISTS idx_project2_measurements_client ON project2_measurements(client_id);
-    CREATE INDEX IF NOT EXISTS idx_project2_payments_client ON project2_payments(client_id);
-  `);
-  initialized = true;
-}
-
-export { getPool };
+let pool: Pool|undefined; let initialized=false;
+function getPool(){const url=process.env.DATABASE_URL?.trim();if(!url)throw new Error('DATABASE_URL is required for Project 2');pool??=new Pool({connectionString:url,ssl:{rejectUnauthorized:false},max:5});return pool;}
+export async function initProject2Db(){if(initialized)return;await getPool().query(`
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE TABLE IF NOT EXISTS project2_clients(id TEXT PRIMARY KEY,telegram_id BIGINT NOT NULL UNIQUE,username TEXT,first_name TEXT,last_name TEXT,goal TEXT,experience TEXT,location TEXT,days_per_week INTEGER,duration_minutes INTEGER,limitations TEXT,status TEXT NOT NULL DEFAULT 'lead',coach_notes TEXT,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+ALTER TABLE project2_clients ADD COLUMN IF NOT EXISTS active_program_id UUID;
+CREATE TABLE IF NOT EXISTS project2_programs(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),client_id TEXT NOT NULL REFERENCES project2_clients(id) ON DELETE CASCADE,name TEXT NOT NULL,goal TEXT,status TEXT NOT NULL DEFAULT 'draft',starts_on DATE,ends_on DATE,rationale TEXT,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS project2_workout_days(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),program_id UUID NOT NULL REFERENCES project2_programs(id) ON DELETE CASCADE,day_number INTEGER NOT NULL,title TEXT NOT NULL,UNIQUE(program_id,day_number));
+CREATE TABLE IF NOT EXISTS project2_exercises(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),workout_day_id UUID NOT NULL REFERENCES project2_workout_days(id) ON DELETE CASCADE,exercise_name TEXT NOT NULL,sets INTEGER,reps TEXT,working_weight_kg NUMERIC,rest_seconds INTEGER,coach_comment TEXT,video_url TEXT,sort_order INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS project2_measurements(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),client_id TEXT NOT NULL REFERENCES project2_clients(id) ON DELETE CASCADE,measured_on DATE NOT NULL,body_weight_kg NUMERIC,body_fat_percent NUMERIC,chest_cm NUMERIC,waist_cm NUMERIC,hips_cm NUMERIC,arm_cm NUMERIC,thigh_cm NUMERIC,notes TEXT);
+CREATE TABLE IF NOT EXISTS project2_notes(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),client_id TEXT NOT NULL REFERENCES project2_clients(id) ON DELETE CASCADE,note TEXT NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS project2_payments(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),client_id TEXT NOT NULL REFERENCES project2_clients(id) ON DELETE CASCADE,amount NUMERIC NOT NULL DEFAULT 0,currency TEXT NOT NULL DEFAULT 'RUB',package_name TEXT,sessions_purchased INTEGER NOT NULL DEFAULT 0,sessions_used INTEGER NOT NULL DEFAULT 0,valid_from DATE,valid_until DATE,comment TEXT,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+`);initialized=true;} export{getPool};
