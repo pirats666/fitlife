@@ -187,26 +187,4 @@ export async function handleTelegramUpdate(update: Update) {
     }
     return;
   }
-  if (cb.data === 'quiz:trainer') {
-    let resultId = session?.resultId;
-    let source = session?.source;
-    let campaign = session?.campaign;
-    if (!resultId) {
-      const previous = await getLatestQuizResult(id);
-      resultId = previous?.id;
-      source = previous?.source ?? undefined;
-      campaign = previous?.campaign ?? undefined;
-    }
-    if (resultId) { await markTrainerClicked(resultId); try { await event(id, 'TRAINER_CLICKED', resultId, source, campaign); } catch (error) { console.error('Trainer click tracking error:', error); } }
-    const username = process.env.TRAINER_TELEGRAM_USERNAME?.replace(/^@/, '');
-    const previous = await getLatestQuizResult(id);
-    const goalText = previous ? goalLabels[previous.goal as QuizGoal] : 'не указана';
-    const locationText = previous ? locationLabels[previous.location as QuizLocation] : 'не указано';
-    const experienceText = previous ? experienceLabels[previous.experience as QuizExperience] : 'не указан';
-    if (username) {
-      const prefilled = encodeURIComponent(`Привет! Я прошёл тест в боте.\nМоя цель: ${goalText}\nТренируюсь: ${locationText}\nОпыт: ${experienceText}\nХочу узнать про индивидуальную работу.`);
-      await send(chatId, 'Отлично 💪\n\nЕсли хочешь индивидуальный подход, открой Telegram — сообщение уже будет подготовлено.\n\nЯ смогу посмотреть твою цель и условия тренировок и обсудить дальнейший план.', { inline_keyboard: [[{ text: '💬 НАПИСАТЬ ТРЕНЕРУ', url: `https://t.me/${username}?text=${prefilled}` }]] });
-    }
-    else await send(chatId, 'Отлично 💪\n\nНапиши свою цель, где тренируешься и что сейчас мешает прогрессу. Я посмотрю ситуацию и подскажу следующий шаг.');
-  }
 }
