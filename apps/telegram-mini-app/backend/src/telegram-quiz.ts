@@ -1,4 +1,4 @@
-import { createQuizResult, event, getLatestQuizResult, getProgramPdfUrl, markProgramDownloaded, markProgramRequested } from './quiz-store.js';
+import { createQuizResult, event, getLatestQuizResult, getLeadStatus, getProgramPdfUrl, markProgramDownloaded, markProgramRequested, setLeadStatus } from './quiz-store.js';
 import { adminMenuText, formatQuizAdminLeads, formatQuizAdminOverview, formatQuizAdminPrograms, formatQuizAdminSources, getQuizAdminStats, getRecentLeads, getSourcePerformance } from './quiz-admin.js';
 import { upsertUser } from './store.js';
 import { goalLabels, locationLabels, experienceLabels, goalRecommendation, recommendProgram, type QuizExperience, type QuizGoal, type QuizLocation } from './quiz.js';
@@ -18,6 +18,19 @@ const adminKeyboard: InlineKeyboard = { inline_keyboard: [
   [{ text: '🔗 ИСТОЧНИКИ', callback_data: 'admin:sources' }],
   [{ text: '🔄 ОБНОВИТЬ', callback_data: 'admin:overview' }],
 ] };
+function leadStatusKeyboard(resultId: string): InlineKeyboard {
+  return { inline_keyboard: [
+    [
+      { text: '🆕 НОВАЯ', callback_data: `admin:status:${resultId}:new` },
+      { text: '🟡 В РАБОТЕ', callback_data: `admin:status:${resultId}:in_progress` },
+    ],
+    [
+      { text: '✅ ЗАКРЫТА', callback_data: `admin:status:${resultId}:closed` },
+      { text: '❌ НЕ АКТУАЛЬНО', callback_data: `admin:status:${resultId}:not_relevant` },
+    ],
+    [{ text: '🎯 К ЗАЯВКАМ', callback_data: 'admin:leads' }],
+  ] };
+}
 
 function isAdmin(id: number) {
   const adminId = Number(process.env.ADMIN_TELEGRAM_ID);
@@ -106,7 +119,33 @@ export async function handleTelegramUpdate(update: Update) {
     if (!isAdmin(id)) { await send(chatId, '⛔ Доступ запрещён.'); return; }
     try {
       if (cb.data === 'admin:overview') await send(chatId, formatQuizAdminOverview(await getQuizAdminStats()), adminKeyboard);
-      else if (cb.data === 'admin:leads') await send(chatId, formatQuizAdminLeads(await getRecentLeads()), adminKeyboard);
+      else if (cb.data === 'admin:leads') {
+        const leads = await getRecentLeads();
+        await send(chatId, formatQuizAdminLeads(leads), adminKeyboard);
+      }
+      else if (cb.data.startsWith('admin:status:')) {
+        const [, , resultId, status] = cb.data.split(':');
+        if (!resultId || !['new', 'in_progress', 'closed', 'not_relevant'].includes(status)) {
+          await send(chatId, 'Некорректный статус заявки.', adminKeyboard);
+        } else {
+          await setLeadStatus(resultId, status as 'new' | 'in_progress' | 'closed' | 'not_relevant');
+          const leads = await getRecentLeads();
+          const lead = leads.find((item) => item.resultId === resultId);
+          await send(chatId, lead ? [
+            '🎯 ЗАЯВКА ОБНОВЛЕНА',
+            '',
+            `👤 ${lead.name} ${lead.username}`,
+            `🆔 ${lead.telegramId}`,
+            `🎯 ${lead.goal}`,
+            `📍 ${lead.location}`,
+            `📈 ${lead.experience}`,
+            `🏋️ ${lead.program}`,
+            `🔗 ${lead.source}`,
+            '',
+            `📌 Статус: ${status === 'in_progress' ? '🟡 В РАБОТЕ' : status === 'closed' ? '✅ ЗАКРЫТА' : status === 'not_relevant' ? '❌ НЕ АКТУАЛЬНО' : '🆕 НОВАЯ'}`,
+          ].join('\n'), leadStatusKeyboard(resultId)) : 'Заявка не найдена.', adminKeyboard);
+        }
+      }
       else if (cb.data === 'admin:programs') await send(chatId, formatQuizAdminPrograms(await getQuizAdminStats()), adminKeyboard);
       else if (cb.data === 'admin:sources') { const stats = await getQuizAdminStats(); const sourcePerformance = await getSourcePerformance(); await send(chatId, formatQuizAdminSources(stats, sourcePerformance), adminKeyboard); }
       else await send(chatId, adminMenuText, adminKeyboard);
@@ -124,7 +163,7 @@ export async function handleTelegramUpdate(update: Update) {
     clearQuizSession(id);
     startQuiz(id, next.source, next.campaign);
     await event(id, 'TEST_STARTED', undefined, next.source, next.campaign);
-    await send(chatId, 'Вопрос 1 из 3\n\nКакая у тебя главная цель сейчас?', goalKeyboard);
+    await send(chatId, '🧩 ВОПРОС 1 ИЗ 3\n\nКакая у тебя главная цель сейчас?\n\n👇 Выбери один вариант', goalKeyboard);
     return;
   }
 
@@ -133,7 +172,7 @@ export async function handleTelegramUpdate(update: Update) {
     if (!Object.prototype.hasOwnProperty.call(goalLabels, goal)) { await send(chatId, 'Выбери один из вариантов ниже 👇', goalKeyboard); return; }
     session = updateQuizSession(id, { goal });
     await event(id, 'QUESTION_1', undefined, session.source, session.campaign);
-    await send(chatId, 'Вопрос 2 из 3\n\nГде ты планируешь тренироваться?', locationKeyboard);
+    await send(chatId, '🧩 ВОПРОС 2 ИЗ 3\n\nГде ты планируешь тренироваться?\n\n👇 Выбери один вариант', locationKeyboard);
     return;
   }
 
@@ -142,7 +181,7 @@ export async function handleTelegramUpdate(update: Update) {
     if (!Object.prototype.hasOwnProperty.call(locationLabels, location)) { await send(chatId, 'Выбери один из вариантов ниже 👇', locationKeyboard); return; }
     session = updateQuizSession(id, { location });
     await event(id, 'QUESTION_2', undefined, session.source, session.campaign);
-    await send(chatId, 'Вопрос 3 из 3\n\nКакой у тебя сейчас опыт тренировок?', experienceKeyboard);
+    await send(chatId, '🧩 ВОПРОС 3 ИЗ 3\n\nКакой у тебя сейчас опыт тренировок?\n\n👇 Выбери один вариант', experienceKeyboard);
     return;
   }
 
@@ -161,7 +200,7 @@ export async function handleTelegramUpdate(update: Update) {
     await event(id, 'QUESTION_3', resultId, session.source, session.campaign);
     await event(id, 'TEST_COMPLETED', resultId, session.source, session.campaign);
     await event(id, 'RESULT_SHOWN', resultId, session.source, session.campaign);
-    await send(chatId, resultText(goal, location, selectedExperience, program), programKeyboard);
+    await send(chatId, `🔎 АНАЛИЗ ЗАВЕРШЁН\n\n${resultText(goal, location, selectedExperience, program).replace('🎯 ТВОЯ СТАРТОВАЯ ТОЧКА\\n\\n', '')}`, programKeyboard);
     return;
   }
 
