@@ -13,6 +13,7 @@ import { listCrmClients, getCrmClient, createCrmClient, updateCrmClient, addClie
 import { createTrainingProgram, getTrainingProgram } from './programs.js';
 import { generateProgramDraft } from './program-generator.js';
 import { listClientPrograms, setProgramStatus } from './program-list.js';
+import { getClientTrainingSessions, logTrainingSession } from './training-sessions.js';
 
 
 
@@ -121,6 +122,18 @@ app.get<{ Params: { clientId: string; programId: string } }>('/api/trainer/crm/c
   const program = await getTrainingProgram(request.params.programId);
   if (!program || program.client_id !== request.params.clientId) return reply.code(404).send({ ok: false, error: 'Program not found' });
   return { ok: true, program };
+});
+app.get<{ Params: { clientId: string } }>('/api/trainer/crm/clients/:clientId/training-sessions', async (request, reply) => {
+  const authUser = await authenticatedUser(headerInitData(request));
+  if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
+  try { return { ok: true, ...(await getClientTrainingSessions(request.params.clientId)) }; }
+  catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Failed to load training sessions' }); }
+});
+app.post<{ Params: { clientId: string }; Body: { workout_day_id: string; performed_at?: string; duration_minutes?: number | null; rpe?: number | null; notes?: string | null } }>('/api/trainer/crm/clients/:clientId/training-sessions', async (request, reply) => {
+  const authUser = await authenticatedUser(headerInitData(request));
+  if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
+  try { return { ok: true, session: await logTrainingSession(request.params.clientId, request.body) }; }
+  catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Invalid training session' }); }
 });
 app.get('/api/schedule', async () => ({ ok: true, schedule: getWeeklySchedule() }));
 app.get<{ Params: { telegramId: string } }>('/api/users/:telegramId/schedule', async (request, reply) => { const telegramId = Number(request.params.telegramId); const authUser = await authenticatedUser(headerInitData(request)); if (!Number.isSafeInteger(telegramId) || !authUser || authUser.id !== telegramId) return reply.code(403).send({ ok: false, error: 'Forbidden' }); return { ok: true, schedule: await getClientSchedule(telegramId) }; });
