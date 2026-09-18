@@ -18,6 +18,7 @@ import { getClientProgress } from './client-progress.js';
 import { listClientMeasurements, createClientMeasurement } from './measurements.js';
 import { listClientNutritionPlans, createClientNutritionPlan, setNutritionPlanStatus } from './nutrition.js';
 import { listClientPayments, createClientPayment, updatePaymentUsage } from './payments.js';
+import { listClientNotes, createClientNote } from './notes.js';
 
 
 
@@ -192,6 +193,18 @@ app.patch<{ Params: { clientId: string; paymentId: string }; Body: { sessions_us
   if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
   try { return { ok: true, payment: await updatePaymentUsage(request.params.clientId, request.params.paymentId, request.body.sessions_used) }; }
   catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Invalid payment usage' }); }
+});
+app.get<{ Params: { clientId: string } }>('/api/trainer/crm/clients/:clientId/notes', async (request, reply) => {
+  const authUser = await authenticatedUser(headerInitData(request));
+  if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
+  try { return { ok: true, notes: await listClientNotes(request.params.clientId) }; }
+  catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Failed to load notes' }); }
+});
+app.post<{ Params: { clientId: string }; Body: { note?: string } }>('/api/trainer/crm/clients/:clientId/notes', async (request, reply) => {
+  const authUser = await authenticatedUser(headerInitData(request));
+  if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
+  try { return { ok: true, note: await createClientNote(request.params.clientId, request.body?.note ?? '') }; }
+  catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Invalid note' }); }
 });
 app.get('/api/schedule', async () => ({ ok: true, schedule: getWeeklySchedule() }));
 app.get<{ Params: { telegramId: string } }>('/api/users/:telegramId/schedule', async (request, reply) => { const telegramId = Number(request.params.telegramId); const authUser = await authenticatedUser(headerInitData(request)); if (!Number.isSafeInteger(telegramId) || !authUser || authUser.id !== telegramId) return reply.code(403).send({ ok: false, error: 'Forbidden' }); return { ok: true, schedule: await getClientSchedule(telegramId) }; });
