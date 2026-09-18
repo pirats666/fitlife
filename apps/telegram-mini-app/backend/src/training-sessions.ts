@@ -9,7 +9,7 @@ export async function getClientTrainingSessions(clientId: string) {
 
   if (daysError) throw new Error(daysError.message);
 
-  const dayIds = (days ?? []).map((day) => day.id);
+  const dayIds = (days ?? []).map((day: { id: string }) => day.id);
   const { data: exercises, error: exercisesError } = dayIds.length
     ? await supabase.from('workout_exercises').select('*').in('workout_day_id', dayIds).order('sort_order', { ascending: true })
     : { data: [], error: null };
