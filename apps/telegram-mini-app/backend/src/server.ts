@@ -12,6 +12,7 @@ import { handleTelegramUpdate } from './telegram-quiz.js';
 import { listCrmClients, getCrmClient, createCrmClient, updateCrmClient, addClientNote, addMeasurement, addPayment } from './crm.js';
 import { createTrainingProgram, getTrainingProgram } from './programs.js';
 import { generateProgramDraft } from './program-generator.js';
+import { listClientPrograms, setProgramStatus } from './program-list.js';
 
 
 
@@ -82,6 +83,20 @@ app.post<{ Params: { clientId: string }; Body: Record<string, unknown> }>('/api/
   if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
   try { return { ok: true, payment: await addPayment(request.params.clientId, request.body ?? {}) }; }
   catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Invalid payment' }); }
+});
+app.get<{ Params: { clientId: string } }>('/api/trainer/crm/clients/:clientId/programs', async (request, reply) => {
+  const authUser = await authenticatedUser(headerInitData(request));
+  if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
+  return { ok: true, programs: await listClientPrograms(request.params.clientId) };
+});
+app.patch<{ Params: { clientId: string; programId: string }; Body: { status: 'active' | 'draft' | 'completed' | 'archived' } }>('/api/trainer/crm/clients/:clientId/programs/:programId/status', async (request, reply) => {
+  const authUser = await authenticatedUser(headerInitData(request));
+  if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
+  try {
+    return { ok: true, program: await setProgramStatus(request.params.clientId, request.params.programId, request.body.status) };
+  } catch (error) {
+    return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Invalid status' });
+  }
 });
 app.post<{ Params: { clientId: string } }>('/api/trainer/crm/clients/:clientId/programs/generate', async (request, reply) => {
   const authUser = await authenticatedUser(headerInitData(request));
