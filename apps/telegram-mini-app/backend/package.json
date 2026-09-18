@@ -7,7 +7,8 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc",
     "start": "node dist/server.js",
-    "telegram:webhook": "tsx src/telegram-bot.ts"
+    "telegram:webhook": "tsx src/telegram-bot.ts",
+    "start:new-bot": "node dist/new-bot-server.js"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.1",
