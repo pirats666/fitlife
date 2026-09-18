@@ -35,26 +35,55 @@ async function loadHistory(){if(!fitLifeUser)return;try{const[h,p]=await Promise
 async function loadTrainerProfile(){try{const d=await api(`/api/users/${fitLifeUser.id}/trainer`);const t=d.trainer;content.innerHTML=t?`<section class="profile-card"><div class="profile-avatar">🏋️</div><div><b>${escapeHtml(t.first_name)}${t.last_name?' '+escapeHtml(t.last_name):''}</b><span>${t.username?'@'+escapeHtml(t.username):'Твой тренер'}</span></div></section>`:'<section class="list-card"><div><b>Тренер пока не назначен</b><span>Когда тренер подключит тебя к FitLife, он появится здесь.</span></div></section>'}catch{content.innerHTML='<section class="list-card"><div><b>Не удалось загрузить</b><span>Попробуй ещё раз.</span></div></section>'}}
 async function renderTrainerClient(clientId){
   try{
-    const [c,programs,progression,adjustment]=await Promise.all([
+    const [c,programs,progression,adjustment,progress,measurements,nutrition,payments,notes]=await Promise.all([
       api(`/api/trainer/crm/clients/${clientId}`),
       api(`/api/trainer/crm/clients/${clientId}/programs`),
       api(`/api/trainer/crm/clients/${clientId}/exercise-progression`),
-      api(`/api/trainer/crm/clients/${clientId}/program-adjustment`)
+      api(`/api/trainer/crm/clients/${clientId}/program-adjustment`),
+      api(`/api/trainer/crm/clients/${clientId}/progress`),
+      api(`/api/trainer/crm/clients/${clientId}/measurements`),
+      api(`/api/trainer/crm/clients/${clientId}/nutrition`),
+      api(`/api/trainer/crm/clients/${clientId}/payments`),
+      api(`/api/trainer/crm/clients/${clientId}/notes`)
     ]);
-    selectedCrmClient=c.client;
-    selectedCrmPrograms=programs.programs||[];
-    selectedCrmProgression=progression.progression||[];
-    selectedCrmAdjustment=adjustment.adjustments||null;selectedCrmProgress=progress;selectedCrmMeasurements=measurements.measurements||[];selectedCrmNutrition=nutrition.plans||[];selectedCrmPayments=payments.payments||[];selectedCrmNotes=notes.notes||[];
-    title.textContent=selectedCrmClient.first_name;
-    subtitle.textContent='CRM • Клиент';
-    renderTrainerClientView();
-  }catch(error){
-    console.error(error);
-    tg?.showAlert?.('Не удалось открыть клиента.');
-    render('clients');
-  }
+    selectedCrmClient=c.client; selectedCrmPrograms=programs.programs||[]; selectedCrmProgression=progression.progression||[]; selectedCrmAdjustment=adjustment.adjustments||null;
+    selectedCrmProgress=progress; selectedCrmMeasurements=measurements.measurements||[]; selectedCrmNutrition=nutrition.plans||[]; selectedCrmPayments=payments.payments||[]; selectedCrmNotes=notes.notes||[];
+    selectedCrmTab='overview'; title.textContent=selectedCrmClient.first_name; subtitle.textContent='CRM • Клиент'; renderTrainerClientView();
+  }catch(error){ console.error(error); tg?.showAlert?.('Не удалось открыть клиента.'); render('clients'); }
 }
 
+function progressionSparkline(history){
+  if(!history?.length)return '';
+  const values=history.map(x=>Number(x.weight_kg??x.estimated_1rm_kg??0)).filter(Number.isFinite);
+  if(values.length<2)return '';
+  const min=Math.min(...values),max=Math.max(...values),range=max-min||1;
+  const points=values.map((v,i)=>`${(i/(values.length-1))*100},${34-((v-min)/range)*28}`).join(' ');
+  return `<svg class="sparkline" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><polyline points="${points}" fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`;
+}
+
+function renderTrainerClientView(){
+  const c=selectedCrmClient, tab=selectedCrmTab;
+  const tabButtons=['overview','programs','progress','measurements','nutrition','payments','notes'];
+  const tabs=tabButtons.map(x=>`<button class="crm-tab ${x===tab?'active':''}" data-crm-tab="${x}">${({overview:'Обзор',programs:'Программа',progress:'Прогресс',measurements:'Измерения',nutrition:'Питание',payments:'Оплаты',notes:'Заметки'})[x]}</button>`).join('');
+  let body='';
+  if(tab==='overview'){
+    body=`<section class="section"><div class="section-title"><h2>Сводка</h2></div><article class="list-card"><div><b>Цель</b><span>${escapeHtml(goalLabel(c.goal))}</span><small>${escapeHtml(c.goal_details||'Детали цели не указаны')}</small></div></article><article class="list-card"><div><b>Опыт и формат</b><span>${escapeHtml(c.training_experience||'—')} • ${escapeHtml(c.training_location||'—')}</span><small>${c.training_days_per_week||'—'} тренировок/нед. • ${c.session_duration_minutes||'—'} мин</small></div></article><article class="list-card adjustment-card"><div><b>${escapeHtml(selectedCrmAdjustment?.recommendation||'Недостаточно данных')}</b><span>${escapeHtml(selectedCrmAdjustment?.reason||'Продолжай собирать историю тренировок и RPE.')}</span></div></article></section>`;
+  } else if(tab==='programs'){
+    body=`<section class="section"><div class="section-title"><h2>Программы</h2></div><button class="primary" data-generate-program>⚡ Сгенерировать программу</button><div id="generatedProgram"></div>${selectedCrmPrograms.length?selectedCrmPrograms.map(p=>`<article class="list-card"><div><b>${escapeHtml(p.name)}</b><span>v${p.version||1} • ${escapeHtml(p.status)} • ${p.starts_on||'без даты'}</span><small>${escapeHtml(p.goal||'Цель не указана')}</small></div></article>`).join(''):'<article class="list-card"><div><b>Программ пока нет</b><span>Сгенерируй первую программу.</span></div></article>'}</section>`;
+  } else if(tab==='progress'){
+    const p=selectedCrmProgress?.summary||{}; body=`<section class="stats crm-stats"><div><b>${p.totalWorkouts||0}</b><span>всего тренировок</span></div><div><b>${p.completedThisWeek||0}</b><span>на этой неделе</span></div><div><b>${p.lastWorkoutAt?new Date(p.lastWorkoutAt).toLocaleDateString('ru-RU'):'—'}</b><span>последняя</span></div></section><section class="section"><div class="section-title"><h2>Упражнения</h2></div>${selectedCrmProgression.length?selectedCrmProgression.map(item=>`<article class="progress-card"><div class="progress-head"><div><b>${escapeHtml(item.exercise_name)}</b><span>Старт: ${item.start_kg??'—'} кг • Сейчас: ${item.current_kg??'—'} кг</span></div><strong class="${Number(item.change_kg)>=0?'progress-up':'progress-down'}">${Number(item.change_kg)>0?'+':''}${item.change_kg??0} кг</strong></div>${progressionSparkline(item.history)}<div class="history-mini">${(item.history||[]).slice(0,5).map(h=>`<span>${new Date(h.performed_at).toLocaleDateString('ru-RU')} • ${h.weight_kg??h.estimated_1rm_kg??'—'} кг${h.sets&&h.reps?' • '+h.sets+'×'+h.reps:''}</span>`).join('')}</div></article>`).join(''):'<article class="list-card"><div><b>Результатов пока нет</b><span>Добавь первый результат.</span></div></article>'}</section><section class="section"><div class="section-title"><h2>Добавить результат</h2></div><div class="crm-form"><input class="text-input" id="progExerciseName" placeholder="Упражнение"/><div class="form-grid"><input class="text-input" id="progWeight" type="number" step="0.5" min="0" placeholder="Вес, кг"/><input class="text-input" id="prog1rm" type="number" step="0.5" min="0" placeholder="1ПМ, кг"/></div><div class="form-grid"><input class="text-input" id="progSets" type="number" min="1" placeholder="Подходы"/><input class="text-input" id="progReps" type="number" min="1" placeholder="Повторы"/></div><input class="text-input" id="progDate" type="date"/><input class="text-input" id="progNotes" placeholder="Комментарий"/><button class="primary" data-save-progression>Сохранить результат</button></div></section>`;
+  } else if(tab==='measurements'){
+    body=`<section class="section"><div class="section-title"><h2>Измерения</h2></div>${selectedCrmMeasurements.map(m=>`<article class="list-card"><div><b>${m.measured_on||'—'}</b><span>Вес: ${m.body_weight_kg??'—'} кг • Талия: ${m.waist_cm??'—'} см</span><small>Грудь: ${m.chest_cm??'—'} • Бёдра: ${m.hips_cm??'—'} • Жир: ${m.body_fat_percent??'—'}%</small></div></article>`).join('')||'<article class="list-card"><div><b>Измерений пока нет</b><span>Добавь первое измерение.</span></div></article>'}</section><section class="section"><div class="section-title"><h2>Новое измерение</h2></div><div class="crm-form"><input class="text-input" id="mDate" type="date"/><div class="form-grid"><input class="text-input" id="mWeight" type="number" step="0.1" placeholder="Вес, кг"/><input class="text-input" id="mBodyFat" type="number" step="0.1" placeholder="Жир, %"/></div><div class="form-grid"><input class="text-input" id="mChest" type="number" step="0.1" placeholder="Грудь, см"/><input class="text-input" id="mWaist" type="number" step="0.1" placeholder="Талия, см"/></div><div class="form-grid"><input class="text-input" id="mHips" type="number" step="0.1" placeholder="Бёдра, см"/><input class="text-input" id="mArm" type="number" step="0.1" placeholder="Рука, см"/></div><div class="form-grid"><input class="text-input" id="mThigh" type="number" step="0.1" placeholder="Бедро, см"/><input class="text-input" id="mNotes" placeholder="Комментарий"/></div><button class="primary" data-save-measurement>Сохранить измерение</button></div></section>`;
+  } else if(tab==='nutrition'){
+    body=`<section class="section"><div class="section-title"><h2>Планы питания</h2></div>${selectedCrmNutrition.map(n=>`<article class="list-card"><div><b>${escapeHtml(n.name)}</b><span>${escapeHtml(n.status)} • ${n.calories??'—'} ккал • Б ${n.protein_g??'—'} / Ж ${n.fat_g??'—'} / У ${n.carbs_g??'—'}</span><small>${escapeHtml(n.instructions||'')}</small></div></article>`).join('')||'<article class="list-card"><div><b>Планов пока нет</b><span>Добавь первый план.</span></div></article>'}</section><section class="section"><div class="section-title"><h2>Новый план</h2></div><div class="crm-form"><input class="text-input" id="nName" placeholder="Название плана"/><input class="text-input" id="nGoal" placeholder="Цель"/><div class="form-grid"><input class="text-input" id="nCalories" type="number" placeholder="Ккал"/><input class="text-input" id="nProtein" type="number" placeholder="Белок, г"/></div><div class="form-grid"><input class="text-input" id="nFat" type="number" placeholder="Жиры, г"/><input class="text-input" id="nCarbs" type="number" placeholder="Углеводы, г"/></div><input class="text-input" id="nStart" type="date"/><input class="text-input" id="nEnd" type="date"/><input class="text-input" id="nInstructions" placeholder="Инструкции"/><button class="primary" data-save-nutrition>Сохранить план</button></div></section>`;
+  } else if(tab==='payments'){
+    body=`<section class="section"><div class="section-title"><h2>Оплаты</h2></div>${selectedCrmPayments.map(p=>`<article class="list-card"><div><b>${p.amount??0} ${escapeHtml(p.currency||'RUB')}</b><span>${escapeHtml(p.package_name||'Пакет не указан')} • использовано ${p.sessions_used||0}/${p.sessions_purchased||0}</span><small>${p.paid_at?new Date(p.paid_at).toLocaleDateString('ru-RU'):'—'}${p.comment?' • '+escapeHtml(p.comment):''}</small></div>${p.sessions_purchased?`<button class="small-primary" data-use-payment="${p.id}" data-used="${p.sessions_used||0}">+1 использовано</button>`:''}</article>`).join('')||'<article class="list-card"><div><b>Оплат пока нет</b><span>Добавь первую оплату.</span></div></article>'}</section><section class="section"><div class="section-title"><h2>Новая оплата</h2></div><div class="crm-form"><div class="form-grid"><input class="text-input" id="payAmount" type="number" step="0.01" placeholder="Сумма"/><input class="text-input" id="payCurrency" value="RUB" placeholder="Валюта"/></div><input class="text-input" id="payPackage" placeholder="Пакет / услуга"/><input class="text-input" id="paySessions" type="number" min="0" placeholder="Куплено тренировок"/><div class="form-grid"><input class="text-input" id="payStart" type="date"/><input class="text-input" id="payEnd" type="date"/></div><input class="text-input" id="payComment" placeholder="Комментарий"/><button class="primary" data-save-payment>Сохранить оплату</button></div></section>`;
+  } else {
+    body=`<section class="section"><div class="section-title"><h2>Заметки</h2></div>${selectedCrmNotes.map(n=>`<article class="list-card"><div><b>${n.created_at?new Date(n.created_at).toLocaleString('ru-RU'):'—'}</b><span>${escapeHtml(n.note||'')}</span></div></article>`).join('')||'<article class="list-card"><div><b>Заметок пока нет</b></div></article>'}</section><section class="section"><div class="crm-form"><textarea class="text-input" id="clientNote" rows="4" placeholder="Новая заметка о клиенте"></textarea><button class="primary" data-save-note>Добавить заметку</button></div></section>`;
+  }
+  content.innerHTML=`<button class="back-button" data-screen="clients">← Назад к клиентам</button><section class="profile-card"><div class="profile-avatar">👤</div><div><b>${escapeHtml(c.first_name)}${c.last_name?' '+escapeHtml(c.last_name):''}</b><span>${c.telegram_username?'@'+escapeHtml(c.telegram_username):'Telegram ID: '+c.telegram_id}</span><small>${escapeHtml(goalLabel(c.goal))} • ${escapeHtml(c.training_experience||'Опыт не указан')}</small></div></section><div class="crm-tabs">${tabs}</div><section class="stats crm-stats"><div><b>${c.active_program_count||0}</b><span>программ</span></div><div><b>${c.active_nutrition_plan_count||0}</b><span>планов питания</span></div><div><b>${c.sessions_remaining||0}</b><span>тренировок осталось</span></div></section>${body}`;
+  const date=document.getElementById('progDate'); if(date&&!date.value)date.value=new Date().toISOString().slice(0,10); const md=document.getElementById('mDate'); if(md&&!md.value)md.value=new Date().toISOString().slice(0,10);
+}
 function progressionSparkline(history){
   if(!history?.length)return '';
   const values=history.map(x=>Number(x.weight_kg??x.estimated_1rm_kg??0)).filter(Number.isFinite);
