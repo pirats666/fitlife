@@ -172,3 +172,5 @@ export function formatQuizAdminLeads(leads: Awaited<ReturnType<typeof getRecentL
     lead.createdAt ? `🕒 ${new Date(lead.createdAt).toLocaleString('ru-RU')}` : '',
   ].filter(Boolean).join('\n')).join('\n\n')].join('\n');
 }
+
+export const adminMenuText = 'Выбери раздел админ-панели 👇';
