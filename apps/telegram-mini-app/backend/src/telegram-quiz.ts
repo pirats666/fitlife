@@ -32,7 +32,7 @@ async function telegram(method: string, body: Record<string, unknown>) {
   return json.result;
 }
 async function send(chatId: number, text: string, replyMarkup?: InlineKeyboard) { return telegram('sendMessage', { chat_id: chatId, text, reply_markup: replyMarkup }); }
-async function answerCallback(id: string) { await telegram('answerCallbackQuery', { callback_query_id: id }); }
+async function answerCallback(id: string) { try { await telegram('answerCallbackQuery', { callback_query_id: id }); } catch (error) { console.warn('Callback acknowledgement skipped:', error); } }
 function parseStart(text: string) {
   const payload = text.split(/\s+/, 2)[1]?.trim() ?? '';
   if (!payload) return { source: undefined, campaign: undefined };
