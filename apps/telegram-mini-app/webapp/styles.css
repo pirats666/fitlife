@@ -67,3 +67,4 @@ h1,h2,p { margin:0; } h1 { font-size:24px; margin-top:4px; }
 @media (max-width:380px) { .form-grid { grid-template-columns:1fr; } }
 
 .generated-program{display:grid;gap:12px;margin-top:12px;padding:14px;border:1px solid #272b2f;border-radius:18px;background:#121518}.generated-program>b,.generated-program>span{display:block}.generated-program>span{font-size:12px;color:#8b9196}.program-day{display:grid;gap:8px;padding-top:10px;border-top:1px solid #272b2f}.program-day>small{color:#8b9196}.program-exercise{display:grid;gap:7px;padding:10px;border-radius:14px;background:#181c20}.program-exercise small{color:#8b9196;font-size:11px}
+.crm-tabs{display:flex;gap:6px;overflow-x:auto;padding:4px 0 10px;position:sticky;top:0;background:#0b0d0f;z-index:2}.crm-tab{flex:0 0 auto;border:1px solid #272b2f;background:#15181b;color:#aeb4b9;border-radius:12px;padding:9px 12px;font-size:12px}.crm-tab.active{color:#0b0d0f;background:#d8ff32;border-color:#d8ff32}
