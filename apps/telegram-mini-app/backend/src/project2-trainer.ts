@@ -82,54 +82,68 @@ export async function registerProject2Trainer(app: FastifyInstance) {
     const level = String(b.level || 'beginner').trim();
     const daysCount = Math.min(6, Math.max(1, Number(b.days_count || 3)));
     const location = String(b.location || 'gym').trim();
+    const equipment = String(b.equipment || '').trim().toLowerCase();
+    const limitations = String(b.limitations || '').trim();
     if (!goal) return reply.code(400).send({ ok: false, error: 'Цель обязательна' });
 
-    const presets: Record<string, { title: string; exercises: string[] }> = {
-      gym: {
-        title: 'Тренировка',
-        exercises: ['Приседания', 'Жим гантелей лёжа', 'Тяга верхнего блока', 'Тяга гантели в наклоне', 'Жим гантелей над головой', 'Dead Bug'],
-      },
-      home: {
-        title: 'Домашняя тренировка',
-        exercises: ['Приседания с собственным весом', 'Отжимания', 'Good Morning', 'Выпады назад', 'Жим вверх без веса', 'Dead Bug'],
-      },
-      outdoor: {
-        title: 'Тренировка на улице',
-        exercises: ['Приседания', 'Отжимания', 'Good Morning', 'Выпады назад', 'Подъём коленей', 'Ходьба быстрым темпом'],
-      },
+    const pool = getPool();
+    const { rows: libraryRows } = await pool.query(
+      'SELECT * FROM project2_exercise_library ORDER BY name',
+    );
+
+    const fallback: Record<string, string[]> = {
+      gym: ['Приседания', 'Жим гантелей лёжа', 'Тяга верхнего блока', 'Тяга гантели в наклоне', 'Жим гантелей над головой', 'Dead Bug'],
+      home: ['Приседания с собственным весом', 'Отжимания', 'Good Morning', 'Выпады назад', 'Жим вверх без веса', 'Dead Bug'],
+      outdoor: ['Приседания', 'Отжимания', 'Good Morning', 'Выпады назад', 'Подъём коленей', 'Ходьба быстрым темпом'],
     };
-    const preset = presets[location] || presets.gym;
+    const keywords = goal.toLowerCase().includes('похуд') || goal.toLowerCase().includes('сниж') ? ['ног', 'груд', 'спин', 'плеч', 'кор'] : ['ног', 'груд', 'спин', 'плеч', 'биц', 'триц', 'кор'];
+    const locationTerms: Record<string,string[]> = {
+      gym: ['зал', 'gym', 'гант', 'штанг', 'блок', 'тренаж'],
+      home: ['дом', 'собствен', 'вес', 'отжим', 'присед', 'good morning'],
+      outdoor: ['улиц', 'турник', 'брусь', 'собствен', 'отжим', 'присед', 'good morning'],
+    };
+    const terms = locationTerms[location] || locationTerms.gym;
+    let candidates = libraryRows.filter((e: any) => {
+      const text = [e.name, e.category, e.muscles, e.description, e.technique].filter(Boolean).join(' ').toLowerCase();
+      const locationOk = terms.some(t => text.includes(t));
+      const limitationOk = !limitations || !limitations.split(',').some((x: string) => x.trim() && text.includes(x.trim().toLowerCase()));
+      const equipmentOk = !equipment || equipment.split(',').some((x: string) => x.trim() && text.includes(x.trim().toLowerCase())) || !text.includes('тренаж');
+      return locationOk && limitationOk && equipmentOk;
+    });
+    if (candidates.length < 6) candidates = libraryRows.filter((e: any) => !limitations || !limitations.split(',').some((x:string)=>x.trim() && [e.name,e.muscles,e.description].filter(Boolean).join(' ').toLowerCase().includes(x.trim().toLowerCase())));
+    const names = candidates.map((e:any)=>e.name).filter(Boolean);
+    const selected = names.length >= 6 ? names.slice(0, 12) : (fallback[location] || fallback.gym);
     const intensity = level === 'advanced' ? { sets: 4, reps: '8-12', rest: 90 } : level === 'intermediate' ? { sets: 3, reps: '8-12', rest: 75 } : { sets: 3, reps: '8-10', rest: 60 };
 
-    const client = await getPool().connect();
+    const client = await pool.connect();
     try {
       await client.query('BEGIN');
       const { rows: programs } = await client.query(
         'INSERT INTO project2_trainer_programs(name,goal,description,status) VALUES($1,$2,$3,$4) RETURNING *',
-        [`Черновик — ${goal}`, goal, `Автоматический черновик: ${daysCount} тренировок в неделю, уровень — ${level}, место — ${location}.`, 'draft'],
+        [`Черновик — ${goal}`, goal, `Автоматический черновик: ${daysCount} тренировок в неделю, уровень — ${level}, место — ${location}.${limitations ? ' Ограничения: ' + limitations + '.' : ''}`, 'draft'],
       );
       const program = programs[0];
       for (let dayNumber = 1; dayNumber <= daysCount; dayNumber++) {
         const { rows: days } = await client.query(
           'INSERT INTO project2_trainer_days(program_id,day_number,title) VALUES($1,$2,$3) RETURNING *',
-          [program.id, dayNumber, `${preset.title} ${dayNumber}`],
+          [program.id, dayNumber, `${location === 'outdoor' ? 'Улица' : location === 'home' ? 'Дом' : 'Зал'} · Тренировка ${dayNumber}`],
         );
         const day = days[0];
-        for (let i = 0; i < preset.exercises.length; i++) {
+        const dayExercises = selected.slice(0, Math.min(8, selected.length));
+        for (let i = 0; i < dayExercises.length; i++) {
+          const lib = libraryRows.find((e:any)=>e.name === dayExercises[i]);
           await client.query(
-            'INSERT INTO project2_trainer_exercises(day_id,exercise_name,sets,reps,rest_seconds,coach_comment,sort_order) VALUES($1,$2,$3,$4,$5,$6,$7)',
-            [day.id, preset.exercises[(i + dayNumber - 1) % preset.exercises.length], intensity.sets, intensity.reps, intensity.rest, 'Проверь технику и подбирай нагрузку по уровню клиента.', i],
+            'INSERT INTO project2_trainer_exercises(day_id,exercise_name,sets,reps,rest_seconds,coach_comment,video_url,sort_order) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',
+            [day.id, dayExercises[i], intensity.sets, intensity.reps, intensity.rest, lib?.technique || 'Проверь технику и подбирай нагрузку по уровню.', lib?.video_url || lib?.gif_url || null, i],
           );
         }
       }
       await client.query('COMMIT');
-      return { ok: true, program_id: program.id, program };
+      return { ok: true, program_id: program.id, program, source: names.length >= 6 ? 'library' : 'fallback' };
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
-    } finally {
-      client.release();
-    }
+    } finally { client.release(); }
   });
 
 
