@@ -4,6 +4,7 @@ if (tg) { tg.ready(); tg.expand(); tg.setHeaderColor?.('#0b0d0f'); tg.setBackgro
 const telegramUser = tg?.initDataUnsafe?.user;
 const content = document.getElementById('screenContent'); const title = document.getElementById('screenTitle'); const subtitle = document.getElementById('screenSubtitle');
 let fitLifeUser=null, workoutCatalog=[], activeWorkout=null, activeExerciseIndex=0, timer=null, remaining=0, weeklySchedule=[], clientSchedule=[], trainerClients=[], selectedClient=null, selectedClientSchedule=[], selectedClientHistory=[];
+let selectedCrmClient=null, selectedCrmPrograms=[], selectedCrmProgression=[], selectedCrmAdjustment=null;
 async function api(path, options={}) { const headers={'Content-Type':'application/json',...(tg?.initData?{'x-telegram-init-data':tg.initData}:{}),...(options.headers||{})}; const response=await fetch(`${API_BASE}${path}`,{...options,headers}); const data=await response.json(); if(!response.ok||!data.ok) throw new Error(data.error||'Ошибка запроса'); return data; }
 async function authenticate(){if(!tg?.initData)return null;return(await api('/api/auth/telegram',{method:'POST',body:JSON.stringify({initData:tg.initData})})).user;}
 async function loadWorkouts(){workoutCatalog=(await api('/api/workouts')).workouts;}
@@ -21,7 +22,7 @@ const screens={
  nutrition:{title:()=> 'Питание',subtitle:()=> 'Основы питания без перегруза',html:()=>`<section class="list-card"><div><b>Питание</b><span>Персональные рекомендации подключим следующим этапом.</span></div></section>`},
  profile:{title:()=> 'Профиль',subtitle:()=> 'Твои данные',html:()=>`<section class="profile-card"><div class="profile-avatar">👤</div><div><b>${escapeHtml(fitLifeUser?.first_name||'Пользователь')}</b><span>${fitLifeUser?.username?'@'+escapeHtml(fitLifeUser.username):'Telegram-профиль'}</span></div></section><section class="list-card"><div><b>Цель</b><span>${goalLabel(fitLifeUser?.goal)}</span></div></section>`},
  trainer:{title:()=> 'Мой тренер',subtitle:()=> 'Связь с тренером',html:()=>`<section class="list-card"><div><b>Загрузка…</b><span>Проверяем назначение тренера.</span></div></section>`},
- clients:{title:()=> 'Клиенты',subtitle:()=> 'Управление клиентами',html:()=>`<section class="section"><div class="section-title"><h2>Мои клиенты</h2></div>${trainerClients.length?trainerClients.map(c=>`<article class="client-card"><div><b>${escapeHtml(c.first_name)}${c.last_name?' '+escapeHtml(c.last_name):''}</b><span>${c.username?'@'+escapeHtml(c.username):'Telegram ID: '+c.id}</span><small>Цель: ${goalLabel(c.goal)}</small></div><button class="small-primary" data-client="${c.id}">Открыть</button></article>`).join(''):'<section class="list-card"><div><b>Клиентов пока нет</b><span>Сначала клиент должен открыть FitLife и пройти авторизацию.</span></div></section>'}</section><section class="section"><div class="section-title"><h2>Добавить клиента</h2></div><div class="form-row"><input class="text-input" id="clientTelegramId" inputmode="numeric" placeholder="Telegram ID"/><button class="small-primary" data-add-client>Добавить</button></div></section>`},
+ clients:{title:()=> 'Клиенты',subtitle:()=> 'CRM тренера',html:()=>`<section class="section"><div class="section-title"><h2>Мои клиенты</h2></div>${trainerClients.length?trainerClients.map(c=>`<article class="client-card"><div><b>${escapeHtml(c.first_name)}${c.last_name?' '+escapeHtml(c.last_name):''}</b><span>${c.telegram_username?'@'+escapeHtml(c.telegram_username):'Telegram ID: '+c.telegram_id}</span><small>${escapeHtml(goalLabel(c.goal))} • Программа: ${c.active_program_count||0} • Осталось тренировок: ${c.sessions_remaining||0}</small></div><button class="small-primary" data-client="${c.id}">Открыть</button></article>`).join(''):'<section class="list-card"><div><b>Клиентов пока нет</b><span>Добавь клиента по Telegram ID после его авторизации.</span></div></section>'}</section><section class="section"><div class="section-title"><h2>Добавить клиента</h2></div><div class="form-row"><input class="text-input" id="clientTelegramId" inputmode="numeric" placeholder="Telegram ID"/><button class="small-primary" data-add-client>Добавить</button></div></section>`},
  onboarding:{title:()=> 'Добро пожаловать',subtitle:()=> 'Настроим FitLife под тебя',html:()=>`<section class="hero-card"><span>ПЕРВЫЙ ШАГ</span><h2>Выбери цель</h2><p>Это поможет настроить будущие тренировки.</p><div class="goal-list"><button class="goal" data-goal="health">🏃 <span>Здоровье и активность</span></button><button class="goal" data-goal="strength">💪 <span>Сила</span></button><button class="goal" data-goal="fitness">🔥 <span>Общая физическая форма</span></button></div></section>`}
 };
 function render(screen='home'){const data=screens[screen]||screens.home;title.textContent=data.title();subtitle.textContent=data.subtitle();content.innerHTML=data.html();document.querySelectorAll('[data-screen]').forEach(el=>el.addEventListener('click',()=>render(el.dataset.screen)));document.querySelectorAll('.bottom-nav button').forEach(el=>el.classList.toggle('active',el.dataset.screen===screen));if(screen==='progress')loadHistory();if(screen==='trainer')loadTrainerProfile();}
@@ -30,9 +31,96 @@ function renderExercise(){const e=activeWorkout.exercises[activeExerciseIndex];c
 async function finishWorkout(){clearInterval(timer);try{await api(`/api/users/${fitLifeUser.id}/workouts/${activeWorkout.id}/complete`,{method:'POST'});tg?.showAlert?.('Тренировка завершена! Отличная работа 💪');render('progress')}catch(e){console.error(e);tg?.showAlert?.('Не удалось сохранить тренировку.');render('home')}}
 async function loadHistory(){if(!fitLifeUser)return;try{const[h,p]=await Promise.all([api(`/api/users/${fitLifeUser.id}/workouts/history`),api(`/api/users/${fitLifeUser.id}/progress`)]);document.getElementById('workoutCount').textContent=p.progress.totalWorkouts;document.getElementById('weekCount').textContent=p.progress.completedThisWeek;document.getElementById('historyText').textContent=h.history.length?`Последняя тренировка: ${new Date(h.history[0].completedAt).toLocaleString('ru-RU')}`:'Пока нет завершённых тренировок'}catch{document.getElementById('historyText').textContent='История пока недоступна'}}
 async function loadTrainerProfile(){try{const d=await api(`/api/users/${fitLifeUser.id}/trainer`);const t=d.trainer;content.innerHTML=t?`<section class="profile-card"><div class="profile-avatar">🏋️</div><div><b>${escapeHtml(t.first_name)}${t.last_name?' '+escapeHtml(t.last_name):''}</b><span>${t.username?'@'+escapeHtml(t.username):'Твой тренер'}</span></div></section>`:'<section class="list-card"><div><b>Тренер пока не назначен</b><span>Когда тренер подключит тебя к FitLife, он появится здесь.</span></div></section>'}catch{content.innerHTML='<section class="list-card"><div><b>Не удалось загрузить</b><span>Попробуй ещё раз.</span></div></section>'}}
-async function renderTrainerClient(clientId){try{const[p,s]=await Promise.all([api(`/api/trainer/${fitLifeUser.id}/clients/${clientId}/progress`),api(`/api/trainer/${fitLifeUser.id}/clients/${clientId}/schedule`)]);selectedClient=p.client;selectedClientHistory=p.history;selectedClientSchedule=s.schedule;title.textContent=selectedClient.first_name;subtitle.textContent='Клиент';renderTrainerClientView()}catch{tg?.showAlert?.('Не удалось открыть клиента.');render('clients')}}
+async function renderTrainerClient(clientId){
+  try{
+    const [c,programs,progression,adjustment]=await Promise.all([
+      api(`/api/trainer/crm/clients/${clientId}`),
+      api(`/api/trainer/crm/clients/${clientId}/programs`),
+      api(`/api/trainer/crm/clients/${clientId}/exercise-progression`),
+      api(`/api/trainer/crm/clients/${clientId}/program-adjustment`)
+    ]);
+    selectedCrmClient=c.client;
+    selectedCrmPrograms=programs.programs||[];
+    selectedCrmProgression=progression.progression||[];
+    selectedCrmAdjustment=adjustment.adjustments||null;
+    title.textContent=selectedCrmClient.first_name;
+    subtitle.textContent='CRM • Клиент';
+    renderTrainerClientView();
+  }catch(error){
+    console.error(error);
+    tg?.showAlert?.('Не удалось открыть клиента.');
+    render('clients');
+  }
+}
+
+function progressionSparkline(history){
+  if(!history?.length)return '';
+  const values=history.map(x=>Number(x.weight_kg??x.estimated_1rm_kg??0)).filter(Number.isFinite);
+  if(values.length<2)return '';
+  const min=Math.min(...values),max=Math.max(...values),range=max-min||1;
+  const points=values.map((v,i)=>`${(i/(values.length-1))*100},${34-((v-min)/range)*28}`).join(' ');
+  return `<svg class="sparkline" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><polyline points="${points}" fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`;
+}
+
+function renderTrainerClientView(){
+  const c=selectedCrmClient;
+  const progression=selectedCrmProgression;
+  const adjustment=selectedCrmAdjustment;
+  content.innerHTML=`
+  <button class="back-button" data-screen="clients">← Назад к клиентам</button>
+  <section class="profile-card"><div class="profile-avatar">👤</div><div><b>${escapeHtml(c.first_name)}${c.last_name?' '+escapeHtml(c.last_name):''}</b><span>${c.telegram_username?'@'+escapeHtml(c.telegram_username):'Telegram ID: '+c.telegram_id}</span><small>${escapeHtml(goalLabel(c.goal))} • ${escapeHtml(c.training_experience||'Опыт не указан')}</small></div></section>
+
+  <section class="stats crm-stats">
+    <div><b>${c.active_program_count||0}</b><span>активных программ</span></div>
+    <div><b>${c.active_nutrition_plan_count||0}</b><span>планов питания</span></div>
+    <div><b>${c.sessions_remaining||0}</b><span>тренировок осталось</span></div>
+  </section>
+
+  <section class="section"><div class="section-title"><h2>Анализ результатов</h2></div>
+    <article class="list-card adjustment-card"><div><b>${adjustment?.recommendation||'Недостаточно данных'}</b><span>${escapeHtml(adjustment?.reason||'Продолжай собирать историю тренировок и RPE.')}</span></div></article>
+  </section>
+
+  <section class="section"><div class="section-title"><h2>Программы</h2></div>
+    ${selectedCrmPrograms.length?selectedCrmPrograms.map(p=>`<article class="list-card"><div><b>${escapeHtml(p.name)}</b><span>v${p.version||1} • ${escapeHtml(p.status)} • ${p.starts_on||'без даты'}</span><small>${escapeHtml(p.goal||'Цель не указана')}</small></div></article>`).join(''):'<article class="list-card"><div><b>Программ пока нет</b><span>Создай программу из CRM на следующем шаге.</span></div></article>'}
+  </section>
+
+  <section class="section"><div class="section-title"><h2>Прогресс упражнений</h2></div>
+    ${progression.length?progression.map(item=>`<article class="progress-card"><div class="progress-head"><div><b>${escapeHtml(item.exercise_name)}</b><span>Старт: ${item.start_kg??'—'} кг • Сейчас: ${item.current_kg??'—'} кг</span></div><strong class="${Number(item.change_kg)>=0?'progress-up':'progress-down'}">${Number(item.change_kg)>0?'+':''}${item.change_kg??0} кг</strong></div>${progressionSparkline(item.history)}<div class="history-mini">${(item.history||[]).slice(0,5).map(h=>`<span>${new Date(h.performed_at).toLocaleDateString('ru-RU')} • ${h.weight_kg??h.estimated_1rm_kg??'—'} кг${h.sets&&h.reps?' • '+h.sets+'×'+h.reps:''}</span>`).join('')}</div></article>`).join(''):'<article class="list-card"><div><b>Результатов пока нет</b><span>Добавь первый результат упражнения ниже.</span></div></article>'}
+  </section>
+
+  <section class="section"><div class="section-title"><h2>Добавить результат</h2></div>
+    <div class="crm-form">
+      <input class="text-input" id="progExerciseName" placeholder="Упражнение, например Жим лёжа"/>
+      <div class="form-grid"><input class="text-input" id="progWeight" type="number" step="0.5" min="0" placeholder="Вес, кг"/><input class="text-input" id="prog1rm" type="number" step="0.5" min="0" placeholder="1ПМ, кг"/></div>
+      <div class="form-grid"><input class="text-input" id="progSets" type="number" min="1" placeholder="Подходы"/><input class="text-input" id="progReps" type="number" min="1" placeholder="Повторы"/></div>
+      <input class="text-input" id="progDate" type="date"/>
+      <input class="text-input" id="progNotes" placeholder="Комментарий"/>
+      <button class="primary" data-save-progression>Сохранить результат</button>
+    </div>
+  </section>
+  `;
+  const date=document.getElementById('progDate'); if(date&&!date.value)date.value=new Date().toISOString().slice(0,10);
+}
 function renderTrainerClientView(){content.innerHTML=`<button class="back-button" data-screen="clients">← Назад к клиентам</button><section class="profile-card"><div class="profile-avatar">👤</div><div><b>${escapeHtml(selectedClient.first_name)}${selectedClient.last_name?' '+escapeHtml(selectedClient.last_name):''}</b><span>${selectedClient.username?'@'+escapeHtml(selectedClient.username):'Telegram ID: '+selectedClient.id}</span><small>Цель: ${goalLabel(selectedClient.goal)}</small></div></section><section class="section"><div class="section-title"><h2>Расписание</h2></div><div class="schedule-editor">${selectedClientSchedule.map(day=>`<label class="schedule-row"><span>${day.label}</span><select class="select" data-day="${day.day}"><option value="">— отдых —</option>${workoutCatalog.map(w=>`<option value="${w.id}" ${w.id===day.workoutId?'selected':''}>${escapeHtml(w.title)}</option>`).join('')}</select></label>`).join('')}</div><button class="primary" data-save-schedule>Сохранить программу</button></section><section class="section"><div class="section-title"><h2>История</h2></div>${selectedClientHistory.length?selectedClientHistory.slice(0,10).map(i=>`<article class="list-card"><div><b>${escapeHtml(workoutCatalog.find(w=>w.id===i.workoutId)?.title||i.workoutId)}</b><span>${new Date(i.completedAt).toLocaleString('ru-RU')}</span></div></article>`).join(''):'<section class="list-card"><div><b>Пока нет завершённых тренировок</b></div></section>'}</section>`}
-content?.addEventListener('click',async event=>{const wBtn=event.target.closest('[data-workout]');if(wBtn){const w=workoutCatalog.find(x=>x.id===wBtn.dataset.workout);if(w)renderWorkoutDetail(w);return}const gBtn=event.target.closest('[data-goal]');if(gBtn&&fitLifeUser){try{fitLifeUser=(await api(`/api/users/${fitLifeUser.id}`,{method:'PATCH',body:JSON.stringify({goal:gBtn.dataset.goal,onboardingCompleted:true})})).user;render('home')}catch{tg?.showAlert?.('Не удалось сохранить данные.')}return}const cBtn=event.target.closest('[data-client]');if(cBtn){renderTrainerClient(Number(cBtn.dataset.client));return}if(event.target.closest('[data-add-client]')){const input=document.getElementById('clientTelegramId');const clientId=Number(input?.value);if(!Number.isSafeInteger(clientId)){tg?.showAlert?.('Введи корректный Telegram ID.');return}try{await api('/api/trainer/clients/assign',{method:'POST',body:JSON.stringify({trainerId:fitLifeUser.id,clientId})});tg?.showAlert?.('Клиент добавлен 👥');await loadTrainerClients();render('clients')}catch{tg?.showAlert?.('Не удалось добавить клиента. Убедись, что он уже открыл FitLife.')}return}if(event.target.closest('[data-save-schedule]')){const items=[...content.querySelectorAll('[data-day]')].map(s=>({day:Number(s.dataset.day),workoutId:s.value||null}));try{const d=await api(`/api/trainer/${fitLifeUser.id}/clients/${selectedClient.id}/schedule`,{method:'PUT',body:JSON.stringify({schedule:items})});selectedClientSchedule=d.schedule;tg?.showAlert?.('Программа сохранена 💪')}catch{tg?.showAlert?.('Не удалось сохранить программу.')}return}const sBtn=event.target.closest('[data-screen]');if(sBtn)render(sBtn.dataset.screen)});
+content?.addEventListener('click',async event=>{const wBtn=event.target.closest('[data-workout]');if(wBtn){const w=workoutCatalog.find(x=>x.id===wBtn.dataset.workout);if(w)renderWorkoutDetail(w);return}const gBtn=event.target.closest('[data-goal]');if(gBtn&&fitLifeUser){try{fitLifeUser=(await api(`/api/users/${fitLifeUser.id}`,{method:'PATCH',body:JSON.stringify({goal:gBtn.dataset.goal,onboardingCompleted:true})})).user;render('home')}catch{tg?.showAlert?.('Не удалось сохранить данные.')}return}const cBtn=event.target.closest('[data-client]');if(cBtn){renderTrainerClient(cBtn.dataset.client);return}
+if(event.target.closest('[data-save-progression]')){
+  const body={
+    exercise_name:document.getElementById('progExerciseName')?.value?.trim(),
+    weight_kg:Number(document.getElementById('progWeight')?.value)||0,
+    estimated_1rm_kg:Number(document.getElementById('prog1rm')?.value)||null,
+    sets:Number(document.getElementById('progSets')?.value)||null,
+    reps:Number(document.getElementById('progReps')?.value)||null,
+    performed_at:document.getElementById('progDate')?.value?new Date(document.getElementById('progDate').value+'T12:00:00').toISOString():new Date().toISOString(),
+    notes:document.getElementById('progNotes')?.value?.trim()||null
+  };
+  if(!body.exercise_name||!body.weight_kg){tg?.showAlert?.('Укажи упражнение и вес.');return}
+  try{
+    await api(`/api/trainer/crm/clients/${selectedCrmClient.id}/exercise-progression`,{method:'POST',body:JSON.stringify(body)});
+    tg?.showAlert?.('Результат сохранён 💪');
+    await renderTrainerClient(selectedCrmClient.id);
+  }catch(error){console.error(error);tg?.showAlert?.('Не удалось сохранить результат.');}
+  return;
+}if(event.target.closest('[data-add-client]')){const input=document.getElementById('clientTelegramId');const clientId=Number(input?.value);if(!Number.isSafeInteger(clientId)){tg?.showAlert?.('Введи корректный Telegram ID.');return}try{await api('/api/trainer/clients/assign',{method:'POST',body:JSON.stringify({trainerId:fitLifeUser.id,clientId})});tg?.showAlert?.('Клиент добавлен 👥');await loadTrainerClients();render('clients')}catch{tg?.showAlert?.('Не удалось добавить клиента. Убедись, что он уже открыл FitLife.')}return}if(event.target.closest('[data-save-schedule]')){const items=[...content.querySelectorAll('[data-day]')].map(s=>({day:Number(s.dataset.day),workoutId:s.value||null}));try{const d=await api(`/api/trainer/${fitLifeUser.id}/clients/${selectedClient.id}/schedule`,{method:'PUT',body:JSON.stringify({schedule:items})});selectedClientSchedule=d.schedule;tg?.showAlert?.('Программа сохранена 💪')}catch{tg?.showAlert?.('Не удалось сохранить программу.')}return}const sBtn=event.target.closest('[data-screen]');if(sBtn)render(sBtn.dataset.screen)});
 document.getElementById('profileButton')?.addEventListener('click',()=>render('profile'));document.querySelectorAll('.bottom-nav button').forEach(b=>b.addEventListener('click',()=>render(b.dataset.screen)));
 async function boot(){try{fitLifeUser=await authenticate();await Promise.all([loadWorkouts(),loadSchedule(),fitLifeUser?.role==='client'?loadClientSchedule():loadTrainerClients()]);if(!fitLifeUser?.onboardingCompleted)render('onboarding');else render('home')}catch(error){console.error(error);tg?.showAlert?.('Не удалось подключиться к FitLife.');render('home')}}
 render('home');boot();
