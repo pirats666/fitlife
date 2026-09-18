@@ -9,6 +9,8 @@ import { getWorkout, workouts } from './workouts.js';
 import { getWeeklySchedule } from './schedule.js';
 import { getClientSchedule, setClientSchedule } from './trainer.js';
 import { handleTelegramUpdate } from './telegram-quiz.js';
+import { listCrmClients, getCrmClient, createCrmClient, updateCrmClient, addClientNote, addMeasurement, addPayment } from './crm.js';
+
 
 const app = Fastify({ logger: true });
 const configuredOrigin = process.env.WEBAPP_ORIGIN?.trim();
@@ -35,6 +37,48 @@ app.get<{ Params: { telegramId: string } }>('/api/users/:telegramId', async (req
 app.patch<{ Params: { telegramId: string }; Body: { goal?: 'health' | 'strength' | 'fitness'; onboardingCompleted?: boolean } }>('/api/users/:telegramId', async (request, reply) => { const telegramId = Number(request.params.telegramId); const authUser = await authenticatedUser(headerInitData(request)); if (!Number.isSafeInteger(telegramId) || !authUser || authUser.id !== telegramId) return reply.code(403).send({ ok: false, error: 'Forbidden' }); const user = await updateUser(telegramId, request.body ?? {}); if (!user) return reply.code(404).send({ ok: false, error: 'User not found' }); return { ok: true, user }; });
 app.post<{ Params: { telegramId: string; workoutId: string } }>('/api/users/:telegramId/workouts/:workoutId/complete', async (request, reply) => { const telegramId = Number(request.params.telegramId); const authUser = await authenticatedUser(headerInitData(request)); if (!Number.isSafeInteger(telegramId) || !authUser || authUser.id !== telegramId) return reply.code(403).send({ ok: false, error: 'Forbidden' }); if (!getWorkout(request.params.workoutId)) return reply.code(404).send({ ok: false, error: 'Workout not found' }); const history = await completeWorkout(telegramId, request.params.workoutId); if (!history) return reply.code(404).send({ ok: false, error: 'User not found' }); return { ok: true, history }; });
 app.get<{ Params: { telegramId: string } }>('/api/users/:telegramId/workouts/history', async (request, reply) => { const telegramId = Number(request.params.telegramId); const authUser = await authenticatedUser(headerInitData(request)); if (!Number.isSafeInteger(telegramId) || !authUser || authUser.id !== telegramId) return reply.code(403).send({ ok: false, error: 'Forbidden' }); const history = await getWorkoutHistory(telegramId); if (!history) return reply.code(404).send({ ok: false, error: 'User not found' }); return { ok: true, history }; });
+app.get('/api/trainer/crm/clients', async (request, reply) => {
+  const authUser = await authenticatedUser(headerInitData(request));
+  if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
+  return { ok: true, clients: await listCrmClients() };
+});
+app.get<{ Params: { clientId: string } }>('/api/trainer/crm/clients/:clientId', async (request, reply) => {
+  const authUser = await authenticatedUser(headerInitData(request));
+  if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
+  const client = await getCrmClient(request.params.clientId);
+  if (!client) return reply.code(404).send({ ok: false, error: 'Client not found' });
+  return { ok: true, client };
+});
+app.post<{ Body: Record<string, unknown> }>('/api/trainer/crm/clients', async (request, reply) => {
+  const authUser = await authenticatedUser(headerInitData(request));
+  if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
+  try { return { ok: true, client: await createCrmClient(request.body ?? {}) }; }
+  catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Invalid client' }); }
+});
+app.patch<{ Params: { clientId: string }; Body: Record<string, unknown> }>('/api/trainer/crm/clients/:clientId', async (request, reply) => {
+  const authUser = await authenticatedUser(headerInitData(request));
+  if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
+  try { return { ok: true, client: await updateCrmClient(request.params.clientId, request.body ?? {}) }; }
+  catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Invalid client update' }); }
+});
+app.post<{ Params: { clientId: string }; Body: { note: string } }>('/api/trainer/crm/clients/:clientId/notes', async (request, reply) => {
+  const authUser = await authenticatedUser(headerInitData(request));
+  if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
+  try { return { ok: true, note: await addClientNote(request.params.clientId, request.body?.note ?? '') }; }
+  catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Invalid note' }); }
+});
+app.post<{ Params: { clientId: string }; Body: Record<string, unknown> }>('/api/trainer/crm/clients/:clientId/measurements', async (request, reply) => {
+  const authUser = await authenticatedUser(headerInitData(request));
+  if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
+  try { return { ok: true, measurement: await addMeasurement(request.params.clientId, request.body ?? {}) }; }
+  catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Invalid measurement' }); }
+});
+app.post<{ Params: { clientId: string }; Body: Record<string, unknown> }>('/api/trainer/crm/clients/:clientId/payments', async (request, reply) => {
+  const authUser = await authenticatedUser(headerInitData(request));
+  if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
+  try { return { ok: true, payment: await addPayment(request.params.clientId, request.body ?? {}) }; }
+  catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Invalid payment' }); }
+});
 app.get('/api/schedule', async () => ({ ok: true, schedule: getWeeklySchedule() }));
 app.get<{ Params: { telegramId: string } }>('/api/users/:telegramId/schedule', async (request, reply) => { const telegramId = Number(request.params.telegramId); const authUser = await authenticatedUser(headerInitData(request)); if (!Number.isSafeInteger(telegramId) || !authUser || authUser.id !== telegramId) return reply.code(403).send({ ok: false, error: 'Forbidden' }); return { ok: true, schedule: await getClientSchedule(telegramId) }; });
 app.get<{ Params: { telegramId: string } }>('/api/users/:telegramId/progress', async (request, reply) => { const telegramId = Number(request.params.telegramId); const authUser = await authenticatedUser(headerInitData(request)); if (!Number.isSafeInteger(telegramId) || !authUser || authUser.id !== telegramId) return reply.code(403).send({ ok: false, error: 'Forbidden' }); const history = await getWorkoutHistory(telegramId); if (!history) return reply.code(404).send({ ok: false, error: 'User not found' }); const weekStart = new Date(); const day = weekStart.getDay() || 7; weekStart.setDate(weekStart.getDate() - day + 1); weekStart.setHours(0, 0, 0, 0); return { ok: true, progress: { totalWorkouts: history.length, completedThisWeek: history.filter((item) => new Date(item.completedAt) >= weekStart).length, lastCompletedAt: history[0]?.completedAt ?? null } }; });
