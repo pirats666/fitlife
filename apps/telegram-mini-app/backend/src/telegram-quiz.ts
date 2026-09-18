@@ -139,19 +139,23 @@ export async function handleTelegramUpdate(update: Update) {
           await setLeadStatus(resultId, status as 'new' | 'in_progress' | 'closed' | 'not_relevant');
           const leads = await getRecentLeads();
           const lead = leads.find((item) => item.resultId === resultId);
-          await send(chatId, lead ? [
-            '🎯 ЗАЯВКА ОБНОВЛЕНА',
-            '',
-            `👤 ${lead.name} ${lead.username}`,
-            `🆔 ${lead.telegramId}`,
-            `🎯 ${lead.goal}`,
-            `📍 ${lead.location}`,
-            `📈 ${lead.experience}`,
-            `🏋️ ${lead.program}`,
-            `🔗 ${lead.source}`,
-            '',
-            `📌 Статус: ${status === 'in_progress' ? '🟡 В РАБОТЕ' : status === 'closed' ? '✅ ЗАКРЫТА' : status === 'not_relevant' ? '❌ НЕ АКТУАЛЬНО' : '🆕 НОВАЯ'}`,
-          ].join('\n'), leadStatusKeyboard(resultId)) : 'Заявка не найдена.', adminKeyboard);
+          if (!lead) {
+            await send(chatId, 'Заявка не найдена.', adminKeyboard);
+          } else {
+            await send(chatId, [
+              '🎯 ЗАЯВКА ОБНОВЛЕНА',
+              '',
+              `👤 ${lead.name} ${lead.username}`,
+              `🆔 ${lead.telegramId}`,
+              `🎯 ${lead.goal}`,
+              `📍 ${lead.location}`,
+              `📈 ${lead.experience}`,
+              `🏋️ ${lead.program}`,
+              `🔗 ${lead.source}`,
+              '',
+              `📌 Статус: ${status === 'in_progress' ? '🟡 В РАБОТЕ' : status === 'closed' ? '✅ ЗАКРЫТА' : status === 'not_relevant' ? '❌ НЕ АКТУАЛЬНО' : '🆕 НОВАЯ'}`,
+            ].join('\n'), leadStatusKeyboard(resultId));
+          }
         }
       }
       else if (cb.data === 'admin:programs') await send(chatId, formatQuizAdminPrograms(await getQuizAdminStats()), adminKeyboard);
