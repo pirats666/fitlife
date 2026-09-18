@@ -89,3 +89,5 @@ export function generateProgramDraft(profile: ClientProfile): ProgramDraft {
     days
   };
 }
+
+// profile-aware selection rules will be applied in the next refinement.
