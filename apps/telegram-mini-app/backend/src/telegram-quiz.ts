@@ -152,7 +152,7 @@ export async function handleTelegramUpdate(update: Update) {
     const previous = await getLatestQuizResult(id);
     if (!previous) { await send(chatId, 'Сначала пройди короткий тест 👇', startKeyboard); return; }
     try { await event(id, 'OFFER_SHOWN', previous.id, previous.source ?? undefined, previous.campaign ?? undefined); } catch (error) { console.error('Offer tracking error:', error); }
-    await send(chatId, '🎯 ИНДИВИДУАЛЬНАЯ ПРОГРАММА\n\nЯ получил твой результат теста. Теперь могу подготовить следующий шаг с учётом твоей цели, места и опыта тренировок.\n\nЯ свяжусь с тобой лично и продолжим с учётом твоего результата.');
+    const trainerId = Number(process.env.ADMIN_TELEGRAM_ID);\n    if (Number.isSafeInteger(trainerId) && trainerId > 0) {\n      const username = cb.from.username ? `@${cb.from.username}` : 'не указан';\n      const leadMessage = `🎯 НОВАЯ ЗАЯВКА НА ИНДИВИДУАЛЬНУЮ ПРОГРАММУ\\n\\n👤 Имя: ${cb.from.first_name ?? 'не указано'} ${cb.from.last_name ?? ''}\\n📱 Telegram: ${username}\\n🆔 Telegram ID: ${id}\\n\\n🎯 Цель: ${goalLabels[previous.goal as QuizGoal]}\\n📍 Место: ${locationLabels[previous.location as QuizLocation]}\\n📈 Опыт: ${experienceLabels[previous.experience as QuizExperience]}\\n🏋️ Рекомендованная программа: ${programTitle(previous.recommended_program)}`;\n      try { await send(trainerId, leadMessage); } catch (error) { console.error('Trainer notification error:', error); }\n    }\n    await send(chatId, '🎯 Заявка принята!\\n\\nЯ передал твой результат тренеру. Он сможет посмотреть твою цель, место тренировок и опыт и связаться с тобой дальше.');
     return;
   }
 
