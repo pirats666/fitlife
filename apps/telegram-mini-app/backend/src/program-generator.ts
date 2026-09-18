@@ -7,7 +7,7 @@ export type ClientProfile = {
 export type TrainingAspect = "hypertrophy" | "strength" | "endurance" | "maintenance" | "general_fitness" | "weight_management";
 export type MuscleGroup = "quadriceps" | "glutes" | "hamstrings" | "calves" | "chest" | "lats" | "upper_back" | "shoulders" | "biceps" | "triceps" | "core" | "cardio";
 export type MovementPattern = "squat" | "hinge" | "horizontal_push" | "horizontal_pull" | "vertical_push" | "vertical_pull" | "core" | "cardio";
-export type ProgressionWeek = { week:number; focus:string; adjustment:string; }; = { name:string; goal:string|null; rationale:string; progression?:ProgressionWeek[]; days:Array<{day_number:number;title:string;notes:string;exercises:Array<{exercise_name:string;sets:number;reps:string;rest_seconds:number;coach_comment:string}>}> };
+export type ProgressionWeek = { week:number; focus:string; adjustment:string; }; export type ProgramDraft = { name:string; goal:string|null; rationale:string; progression?:ProgressionWeek[]; days:Array<{day_number:number;title:string;notes:string;exercises:Array<{exercise_name:string;sets:number;reps:string;rest_seconds:number;coach_comment:string}>}> };
 
 type TrainingLevel = "beginner" | "intermediate" | "advanced";
 function progressionWeeks(aspect:TrainingAspect,level:TrainingLevel):ProgressionWeek[]{const base=level==="beginner"?["освоение техники","закрепление техники","умеренное увеличение объёма","проверка переносимости"]:level==="advanced"?["базовая нагрузка","увеличение нагрузки","увеличение объёма","контрольная неделя"]:["освоение рабочего диапазона","постепенное увеличение нагрузки","закрепление прогрессии","оценка результата"];return base.map((focus,i)=>({week:i+1,focus,adjustment:aspect==="strength"?(i===0?"сохранить запас и технику":"при стабильной технике постепенно увеличить основной параметр нагрузки"):aspect==="endurance"?(i===0?"сохранить комфортный темп":"постепенно увеличить объём или немного сократить отдых"):aspect==="maintenance"?"сохранить регулярность и контролируемый объём":aspect==="weight_management"?"постепенно увеличивать доступный объём активности без резких изменений":"при стабильном выполнении постепенно увеличить нагрузку или усложнить вариант"}));}
@@ -41,6 +41,31 @@ const patternPriority:Record<TrainingAspect,MovementPattern[]>={hypertrophy:["sq
 
 function muscleScore(e:Template,load:Record<MuscleGroup,number>,day:number,aspect:TrainingAspect){const avg=e.muscleGroups.reduce((sum,m)=>sum+load[m],0)/Math.max(1,e.muscleGroups.length);const aspectBonus=aspect==="hypertrophy"&&e.muscleGroups.some(m=>["chest","lats","quadriceps","glutes","hamstrings"].includes(m))?-0.5:0;return avg+aspectBonus+(day%2===0&&e.name.includes("собственного веса")?0.05:0);}
 function selectForDay(pool:Template[],aspect:TrainingAspect,day:number,limit:number,load:Record<MuscleGroup,number>,used:Set<string>){const picked:Template[]=[];for(const pattern of patternPriority[aspect]){if(picked.length>=limit)break;const candidates=pool.filter(e=>e.pattern===pattern&&!picked.some(x=>x.name===e.name));if(!candidates.length)continue;candidates.sort((a,b)=>muscleScore(a,load,day,aspect)-muscleScore(b,load,day,aspect));const unused=candidates.find(e=>!used.has(e.name));picked.push(unused??candidates[0]);}for(const e of pool){if(picked.length>=limit)break;if(!picked.some(x=>x.name===e.name))picked.push(e);}return picked;}
+
+export type ProgressionSignal = {
+  exercise_name:string;
+  start_kg:number|null;
+  current_kg:number|null;
+  change_kg:number|null;
+  trend:"up"|"down"|"stable"|"no_data";
+  recommendation:"increase"|"maintain"|"review";
+};
+
+export function applyProgressionToDraft(draft:ProgramDraft, signals:ProgressionSignal[]):ProgramDraft {
+  const byName=new Map(signals.map(s=>[s.exercise_name.toLowerCase().trim(),s]));
+  const days=draft.days.map(day=>({...day,exercises:day.exercises.map(ex=>{
+    const signal=byName.get(ex.exercise_name.toLowerCase().trim());
+    if(!signal)return ex;
+    const recommendation=signal.recommendation==="increase"
+      ? "При стабильной технике рассмотреть небольшое увеличение рабочего веса/сложности."
+      : signal.recommendation==="review"
+      ? "Проверить технику, восстановление и переносимость перед изменением нагрузки."
+      : "Сохранить текущую нагрузку и продолжить сбор результатов.";
+    const change=signal.change_kg==null ? "нет данных" : (signal.change_kg>0?"+":"")+signal.change_kg+" кг";
+    return {...ex,coach_comment:[ex.coach_comment,recommendation,"Фактический прогресс: "+(signal.current_kg??"нет данных")+" кг (изменение "+change+")."].join(" ")};
+  })}));
+  return {...draft,days,rationale:[draft.rationale,"Прогрессия упражнений учитывается как рекомендация для тренера; программа автоматически не изменяется."].join(" ")};
+}
 
 export function generateProgramDraft(profile:ClientProfile):ProgramDraft{
  const daysCount=Math.min(6,Math.max(1,Number(profile.training_days_per_week)||3));const level=detectLevel(profile);const aspect=detectAspect(profile);const v=volume(profile,aspect,level);const limit=exerciseLimit(profile.session_duration_minutes,level);const pool=templates.filter(e=>allowed(e,profile,level)&&e.aspects.includes(aspect));
