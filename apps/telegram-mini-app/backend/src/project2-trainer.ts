@@ -75,6 +75,54 @@ export async function registerProject2Trainer(app: FastifyInstance) {
     return { ok: true };
   });
 
+  app.post('/api/project2/trainer/programs/:programId/duplicate', async (request, reply) => {
+    await initProject2Db();
+    const sourceId = String((request.params as any).programId);
+    const b: any = request.body || {};
+    const client = await getPool().connect();
+    try {
+      await client.query('BEGIN');
+      const { rows: sourceRows } = await client.query('SELECT * FROM project2_trainer_programs WHERE id=$1', [sourceId]);
+      const source = sourceRows[0];
+      if (!source) {
+        await client.query('ROLLBACK');
+        return reply.code(404).send({ ok: false, error: 'Program not found' });
+      }
+      const name = String(b.name || (source.name + ' — копия')).trim();
+      const status = String(b.status || 'draft');
+      const { rows: programRows } = await client.query(
+        'INSERT INTO project2_trainer_programs(name,goal,description,status) VALUES($1,$2,$3,$4) RETURNING *',
+        [name, source.goal, source.description, status],
+      );
+      const program = programRows[0];
+      const { rows: days } = await client.query('SELECT * FROM project2_trainer_days WHERE program_id=$1 ORDER BY day_number', [sourceId]);
+      for (const day of days) {
+        const { rows: newDays } = await client.query(
+          'INSERT INTO project2_trainer_days(program_id,day_number,title) VALUES($1,$2,$3) RETURNING *',
+          [program.id, day.day_number, day.title],
+        );
+        const newDay = newDays[0];
+        const { rows: exercises } = await client.query(
+          'SELECT * FROM project2_trainer_exercises WHERE day_id=$1 ORDER BY sort_order,id', [day.id],
+        );
+        for (const ex of exercises) {
+          await client.query(
+            'INSERT INTO project2_trainer_exercises(day_id,exercise_name,sets,reps,working_weight_kg,rest_seconds,coach_comment,video_url,sort_order) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+            [newDay.id, ex.exercise_name, ex.sets, ex.reps, ex.working_weight_kg, ex.rest_seconds, ex.coach_comment, ex.video_url, ex.sort_order],
+          );
+        }
+      }
+      await client.query('COMMIT');
+      return { ok: true, program };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
+
+
   app.post('/api/project2/trainer/programs/:programId/days', async (request, reply) => {
     await initProject2Db();
     const pid = String((request.params as any).programId);
