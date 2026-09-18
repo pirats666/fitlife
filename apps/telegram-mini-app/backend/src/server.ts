@@ -22,6 +22,7 @@ import { listClientNutritionPlans, createClientNutritionPlan, setNutritionPlanSt
 import { listClientPayments, createClientPayment, updatePaymentUsage } from './payments.js';
 import { listClientNotes, createClientNote } from './notes.js';
 import { logExercisePerformance, getExerciseProgression } from './exercise-progression.js';
+import { processQuizFollowups } from './quiz-followups.js';
 
 
 
@@ -232,6 +233,18 @@ app.get<{ Params: { clientId: string } }>('/api/users/:clientId/trainer', async 
 
 const port = Number(process.env.PORT ?? 3000); const host = process.env.HOST ?? '0.0.0.0';
 await app.listen({ port, host });
+
+async function runQuizFollowups() {
+  try {
+    const sent = await processQuizFollowups();
+    if (sent) app.log.info({ sent }, 'Quiz follow-ups sent');
+  } catch (error) {
+    app.log.error(error, 'Quiz follow-up job failed');
+  }
+}
+
+void runQuizFollowups();
+setInterval(() => { void runQuizFollowups(); }, 60 * 60 * 1000);
 
 async function configureNewBotWebhook() {
   const token = process.env.NEW_TELEGRAM_BOT_TOKEN?.trim();
