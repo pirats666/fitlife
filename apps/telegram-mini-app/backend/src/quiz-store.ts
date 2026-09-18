@@ -34,7 +34,7 @@ export async function getDueFollowups(now = new Date()) {
   const firstCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
   const secondCutoff = new Date(now.getTime() - 72 * 60 * 60 * 1000).toISOString();
   const { data, error } = await db.from('quiz_results')
-    .select('id,telegram_id,goal,location,experience,recommended_program,followup_eligible_at,followup_1_sent_at,followup_2_sent_at')
+    .select('id,telegram_id,goal,location,experience,recommended_program,source,campaign,followup_eligible_at,followup_1_sent_at,followup_2_sent_at')
     .not('followup_eligible_at', 'is', null)
     .or(`and(followup_1_sent_at.is.null,followup_eligible_at.lte.${firstCutoff}),and(followup_2_sent_at.is.null,followup_eligible_at.lte.${secondCutoff})`)
     .order('followup_eligible_at', { ascending: true })
