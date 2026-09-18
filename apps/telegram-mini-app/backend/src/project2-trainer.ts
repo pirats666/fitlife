@@ -75,6 +75,64 @@ export async function registerProject2Trainer(app: FastifyInstance) {
     return { ok: true };
   });
 
+  app.post('/api/project2/trainer/programs/generate', async (request, reply) => {
+    await initProject2Db();
+    const b: any = request.body || {};
+    const goal = String(b.goal || '').trim();
+    const level = String(b.level || 'beginner').trim();
+    const daysCount = Math.min(6, Math.max(1, Number(b.days_count || 3)));
+    const location = String(b.location || 'gym').trim();
+    if (!goal) return reply.code(400).send({ ok: false, error: 'Цель обязательна' });
+
+    const presets: Record<string, { title: string; exercises: string[] }> = {
+      gym: {
+        title: 'Тренировка',
+        exercises: ['Приседания', 'Жим гантелей лёжа', 'Тяга верхнего блока', 'Тяга гантели в наклоне', 'Жим гантелей над головой', 'Dead Bug'],
+      },
+      home: {
+        title: 'Домашняя тренировка',
+        exercises: ['Приседания с собственным весом', 'Отжимания', 'Good Morning', 'Выпады назад', 'Жим вверх без веса', 'Dead Bug'],
+      },
+      outdoor: {
+        title: 'Тренировка на улице',
+        exercises: ['Приседания', 'Отжимания', 'Good Morning', 'Выпады назад', 'Подъём коленей', 'Ходьба быстрым темпом'],
+      },
+    };
+    const preset = presets[location] || presets.gym;
+    const intensity = level === 'advanced' ? { sets: 4, reps: '8-12', rest: 90 } : level === 'intermediate' ? { sets: 3, reps: '8-12', rest: 75 } : { sets: 3, reps: '8-10', rest: 60 };
+
+    const client = await getPool().connect();
+    try {
+      await client.query('BEGIN');
+      const { rows: programs } = await client.query(
+        'INSERT INTO project2_trainer_programs(name,goal,description,status) VALUES($1,$2,$3,$4) RETURNING *',
+        [`Черновик — ${goal}`, goal, `Автоматический черновик: ${daysCount} тренировок в неделю, уровень — ${level}, место — ${location}.`, 'draft'],
+      );
+      const program = programs[0];
+      for (let dayNumber = 1; dayNumber <= daysCount; dayNumber++) {
+        const { rows: days } = await client.query(
+          'INSERT INTO project2_trainer_days(program_id,day_number,title) VALUES($1,$2,$3) RETURNING *',
+          [program.id, dayNumber, `${preset.title} ${dayNumber}`],
+        );
+        const day = days[0];
+        for (let i = 0; i < preset.exercises.length; i++) {
+          await client.query(
+            'INSERT INTO project2_trainer_exercises(day_id,exercise_name,sets,reps,rest_seconds,coach_comment,sort_order) VALUES($1,$2,$3,$4,$5,$6,$7)',
+            [day.id, preset.exercises[(i + dayNumber - 1) % preset.exercises.length], intensity.sets, intensity.reps, intensity.rest, 'Проверь технику и подбирай нагрузку по уровню клиента.', i],
+          );
+        }
+      }
+      await client.query('COMMIT');
+      return { ok: true, program_id: program.id, program };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
+
+
   app.post('/api/project2/trainer/programs/:programId/duplicate', async (request, reply) => {
     await initProject2Db();
     const sourceId = String((request.params as any).programId);
