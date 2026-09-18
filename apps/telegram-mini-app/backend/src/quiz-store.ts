@@ -40,7 +40,25 @@ export async function getDueFollowups(now = new Date()) {
     .order('followup_eligible_at', { ascending: true })
     .limit(100);
   if (error) throw error;
-  return data ?? [];
+  const rows = data ?? [];
+  const { data: offers, error: offersError } = await db.from('funnel_events')
+    .select('quiz_result_id')
+    .eq('event_name', 'OFFER_SHOWN')
+    .not('quiz_result_id', 'is', null);
+  if (offersError) throw offersError;
+  const offeredIds = new Set((offers ?? []).map((row) => String(row.quiz_result_id)));
+  return rows.filter((row) => !offeredIds.has(String(row.id)));
+}
+
+export async function getLeadStatus(id: string) {
+  const { data, error } = await db.from('quiz_results').select('lead_status').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return String(data?.lead_status ?? 'new');
+}
+
+export async function setLeadStatus(id: string, status: 'new' | 'in_progress' | 'closed' | 'not_relevant') {
+  const { error } = await db.from('quiz_results').update({ lead_status: status }).eq('id', id);
+  if (error) throw error;
 }
 
 export async function markFollowupSent(id: string, step: 1 | 2) {
