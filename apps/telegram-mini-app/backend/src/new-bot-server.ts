@@ -14,6 +14,8 @@ app.get('/', async () => ({
   webhook: 'telegram',
 }));
 
+app.get('/admin', async () => ({ ok: true, service: 'pavel-fitness-support-crm', panel: '/project2-admin.html' }));
+
 app.get('/health', async () => ({
   ok: true,
   service: 'pavel-fitness-support-bot',
