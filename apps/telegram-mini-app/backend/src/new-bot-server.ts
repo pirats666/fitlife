@@ -11,9 +11,9 @@ const host = process.env.HOST ?? '0.0.0.0';
 
 async function configureWebhook() {
   const token = process.env.NEW_TELEGRAM_BOT_TOKEN?.trim();
-  const baseUrl = process.env.NEW_TELEGRAM_WEBHOOK_URL?.trim() || process.env.RENDER_EXTERNAL_URL?.trim();
-  if (!token || !baseUrl) {
-    app.log.warn('Telegram webhook was not configured: bot token or webhook URL is missing');
+  const baseUrl = process.env.NEW_TELEGRAM_WEBHOOK_URL?.trim() || process.env.RENDER_EXTERNAL_URL?.trim() || 'https://pavel-fitness-support-bot.onrender.com';
+  if (!token) {
+    app.log.warn('Telegram webhook was not configured: NEW_TELEGRAM_BOT_TOKEN is missing');
     return;
   }
   const webhookUrl = baseUrl.replace(/\/$/, '') + '/api/telegram/new-bot/webhook';
