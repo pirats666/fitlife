@@ -122,6 +122,14 @@ export async function handleTelegramUpdate(update: Update) {
       else if (cb.data === 'admin:leads') {
         const leads = await getRecentLeads();
         await send(chatId, formatQuizAdminLeads(leads), adminKeyboard);
+        for (const lead of leads) {
+          if (!lead.resultId) continue;
+          await send(chatId, [
+            `🎯 ${lead.name} ${lead.username}`,
+            `🆔 ${lead.telegramId}`,
+            `📌 Статус: ${lead.status === 'in_progress' ? '🟡 В РАБОТЕ' : lead.status === 'closed' ? '✅ ЗАКРЫТА' : lead.status === 'not_relevant' ? '❌ НЕ АКТУАЛЬНО' : '🆕 НОВАЯ'}`,
+          ].join('\n'), leadStatusKeyboard(lead.resultId));
+        }
       }
       else if (cb.data.startsWith('admin:status:')) {
         const [, , resultId, status] = cb.data.split(':');
