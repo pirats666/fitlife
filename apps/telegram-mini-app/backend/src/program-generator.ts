@@ -22,7 +22,7 @@ const templates:Template[]=[
  {name:"Тяга гантели в наклоне",tags:["gym","home"],muscleGroups:["lats","upper_back","biceps"],focus:"back",pattern:"horizontal_pull",equipment:["гантел"],blocked:["поясниц","спин"],aspects:["hypertrophy","strength","maintenance"]},
  {name:"Жим гантелей вверх",tags:["gym","home"],muscleGroups:["shoulders","triceps"],focus:"shoulders",pattern:"vertical_push",equipment:["гантел"],blocked:["плеч","локт"],aspects:["hypertrophy","strength","maintenance"]},
  {name:"Dead Bug",tags:["home","street","gym"],muscleGroups:["core"],focus:"core",pattern:"core",aspects:["endurance","maintenance","general_fitness"]},
- {name:"Ходьба быстрым темпом",tags:["home","street","gym"],muscleGroups:["cardio"],focus:"cardio",pattern:"cardio",aspects:["endurance","maintenance","general_fitness","weight_management"]}
+ {name:"Ходьба быстрым темпом",tags:["home","street","gym"],muscleGroups:["cardio"],focus:"cardio",pattern:"cardio",aspects:["endurance","maintenance","general_fitness","weight_management"],levels:["beginner","intermediate","advanced"]}
 ];
 
 function locationKey(location?:string|null){const v=(location??"").toLowerCase();if(v.includes("зал")||v.includes("gym"))return"gym";if(v.includes("улиц")||v.includes("street")||v.includes("площад"))return"street";if(v.includes("дом")||v.includes("home"))return"home";return"home";}
