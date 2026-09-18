@@ -10,7 +10,7 @@ export async function createQuizResult(telegramId: number, goal: QuizGoal, locat
 }
 
 export async function getLatestQuizResult(telegramId: number) {
-  const { data, error } = await db.from('quiz_results').select('id,goal,location,experience,recommended_program,source,campaign,completed_at,program_downloaded_at').eq('telegram_id', telegramId).order('completed_at', { ascending: false, nullsFirst: false }).order('started_at', { ascending: false }).limit(1).maybeSingle();
+  const { data, error } = await db.from('quiz_results').select('id,goal,location,experience,recommended_program,source,campaign,completed_at,program_downloaded_at,followup_eligible_at,followup_1_sent_at,followup_2_sent_at').eq('telegram_id', telegramId).order('completed_at', { ascending: false, nullsFirst: false }).order('started_at', { ascending: false }).limit(1).maybeSingle();
   if (error) throw error;
   return data;
 }
@@ -27,5 +27,24 @@ export async function event(telegramId: number, eventName: string, quizResultId?
 }
 
 export async function markProgramRequested(id: string) { await db.from('quiz_results').update({ program_requested_at: new Date().toISOString() }).eq('id', id); }
-export async function markProgramDownloaded(id: string) { await db.from('quiz_results').update({ program_downloaded_at: new Date().toISOString() }).eq('id', id); }
+export async function markProgramDownloaded(id: string) { const now = new Date().toISOString(); await db.from('quiz_results').update({ program_downloaded_at: now, followup_eligible_at: now }).eq('id', id); }
 export async function markTrainerClicked(id: string) { await db.from('quiz_results').update({ trainer_clicked_at: new Date().toISOString() }).eq('id', id); }
+
+export async function getDueFollowups(now = new Date()) {
+  const firstCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+  const secondCutoff = new Date(now.getTime() - 72 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await db.from('quiz_results')
+    .select('id,telegram_id,goal,location,experience,recommended_program,followup_eligible_at,followup_1_sent_at,followup_2_sent_at')
+    .not('followup_eligible_at', 'is', null)
+    .or(`and(followup_1_sent_at.is.null,followup_eligible_at.lte.${firstCutoff}),and(followup_2_sent_at.is.null,followup_eligible_at.lte.${secondCutoff})`)
+    .order('followup_eligible_at', { ascending: true })
+    .limit(100);
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function markFollowupSent(id: string, step: 1 | 2) {
+  const column = step === 1 ? 'followup_1_sent_at' : 'followup_2_sent_at';
+  const { error } = await db.from('quiz_results').update({ [column]: new Date().toISOString() }).eq('id', id);
+  if (error) throw error;
+}
