@@ -67,6 +67,18 @@ export async function registerProject2Trainer(app: FastifyInstance) {
     return { ok: true, program: rows[0] };
   });
 
+  app.post('/api/project2/trainer/programs/:programId/activate', async (request, reply) => {
+    await initProject2Db(); const id=String((request.params as any).programId); const client=getPool(); const check=await client.query('SELECT p.id,(SELECT COUNT(*) FROM project2_trainer_days d WHERE d.program_id=p.id) days,(SELECT COUNT(*) FROM project2_trainer_exercises e JOIN project2_trainer_days d ON d.id=e.day_id WHERE d.program_id=p.id) exercises FROM project2_trainer_programs p WHERE p.id=$1',[id]);
+    if(!check.rows[0]) return reply.code(404).send({ok:false,error:'Program not found'});
+    if(!check.rows[0].days || !check.rows[0].exercises) return reply.code(400).send({ok:false,error:'Добавьте хотя бы один день и упражнение'});
+    const {rows}=await client.query("UPDATE project2_trainer_programs SET status='active',updated_at=NOW() WHERE id=$1 RETURNING *",[id]); return {ok:true,program:rows[0]};
+  });
+  app.post('/api/project2/trainer/programs/:programId/review', async (request, reply) => {
+    await initProject2Db(); const id=String((request.params as any).programId);
+    const {rows}=await getPool().query("UPDATE project2_trainer_programs SET status='review',updated_at=NOW() WHERE id=$1 RETURNING *",[id]);
+    if(!rows[0]) return reply.code(404).send({ok:false,error:'Program not found'}); return {ok:true,program:rows[0]};
+  });
+
   app.delete('/api/project2/trainer/programs/:programId', async (request, reply) => {
     await initProject2Db();
     const id = String((request.params as any).programId);
