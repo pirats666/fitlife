@@ -92,6 +92,85 @@ export async function getQuizAdminStats() {
   };
 }
 
+export async function getSourcePerformance() {
+  const [resultsResponse, startsResponse, offersResponse] = await Promise.all([
+    db.from('quiz_results').select('id, telegram_id, source, campaign, completed_at, program_downloaded_at'),
+    db.from('funnel_events').select('telegram_id, source, campaign').eq('event_name', 'START'),
+    db.from('funnel_events').select('telegram_id, quiz_result_id, source, campaign').eq('event_name', 'OFFER_SHOWN'),
+  ]);
+  for (const response of [resultsResponse, startsResponse, offersResponse]) {
+    if (response.error) throw response.error;
+  }
+
+  type SourceStats = {
+    starts: number;
+    uniqueStarts: Set<number>;
+    tests: number;
+    uniqueTests: Set<number>;
+    downloads: number;
+    offers: number;
+    uniqueOffers: Set<number>;
+  };
+
+  const stats = new Map<string, SourceStats>();
+  const getKey = (source: unknown, campaign: unknown) => {
+    const normalizedSource = String(source ?? 'organic');
+    const normalizedCampaign = campaign ? String(campaign) : '';
+    return normalizedCampaign ? `${normalizedSource} / ${normalizedCampaign}` : normalizedSource;
+  };
+  const getStats = (key: string) => {
+    const existing = stats.get(key);
+    if (existing) return existing;
+    const created: SourceStats = {
+      starts: 0, uniqueStarts: new Set(), tests: 0, uniqueTests: new Set(),
+      downloads: 0, offers: 0, uniqueOffers: new Set(),
+    };
+    stats.set(key, created);
+    return created;
+  };
+
+  for (const row of startsResponse.data ?? []) {
+    const key = getKey(row.source, row.campaign);
+    const item = getStats(key);
+    item.starts += 1;
+    item.uniqueStarts.add(Number(row.telegram_id));
+  }
+
+  const resultsById = new Map<string, { telegram_id: number; source?: string | null; campaign?: string | null; program_downloaded_at?: string | null }>();
+  for (const row of resultsResponse.data ?? []) {
+    const key = getKey(row.source, row.campaign);
+    const item = getStats(key);
+    item.tests += 1;
+    item.uniqueTests.add(Number(row.telegram_id));
+    if (row.program_downloaded_at) item.downloads += 1;
+    resultsById.set(String(row.id), row);
+  }
+
+  for (const row of offersResponse.data ?? []) {
+    const result = row.quiz_result_id ? resultsById.get(String(row.quiz_result_id)) : undefined;
+    const key = result ? getKey(result.source, result.campaign) : getKey(row.source, row.campaign);
+    const item = getStats(key);
+    item.offers += 1;
+    item.uniqueOffers.add(Number(row.telegram_id));
+  }
+
+  return [...stats.entries()]
+    .map(([source, item]) => ({
+      source,
+      starts: item.starts,
+      uniqueStarts: item.uniqueStarts.size,
+      tests: item.tests,
+      uniqueTests: item.uniqueTests.size,
+      downloads: item.downloads,
+      offers: item.offers,
+      uniqueOffers: item.uniqueOffers.size,
+      startToTest: percent(item.uniqueTests.size, item.uniqueStarts.size),
+      testToDownload: percent(item.downloads, item.tests),
+      testToOffer: percent(item.uniqueOffers.size, item.uniqueTests.size),
+    }))
+    .sort((a, b) => b.uniqueOffers - a.uniqueOffers || b.uniqueTests - a.uniqueTests || b.starts - a.starts);
+}
+
 export async function getRecentLeads(limit = 8) {
   const { data: events, error: eventsError } = await db.from('funnel_events')
     .select('telegram_id, quiz_result_id, created_at').eq('event_name', 'OFFER_SHOWN')
@@ -157,8 +236,22 @@ export function formatQuizAdminOverview(stats: Awaited<ReturnType<typeof getQuiz
 export function formatQuizAdminPrograms(stats: Awaited<ReturnType<typeof getQuizAdminStats>>) {
   return ['📄 ПРОГРАММЫ', '', section('Рекомендованные программы', stats.programs, (key) => label(programLabels, key))].join('\n');
 }
-export function formatQuizAdminSources(stats: Awaited<ReturnType<typeof getQuizAdminStats>>) {
-  return ['🔗 ИСТОЧНИКИ И КАМПАНИИ', '', section('Откуда приходят пользователи', stats.sources)].join('\n');
+export function formatQuizAdminSources(stats: Awaited<ReturnType<typeof getQuizAdminStats>>, sourcePerformance: Awaited<ReturnType<typeof getSourcePerformance>>) {
+  if (!sourcePerformance.length) {
+    return ['🔗 ИСТОЧНИКИ И КАМПАНИИ', '', 'Пока нет данных по источникам.'].join('\\n');
+  }
+  const lines = ['🔗 ИСТОЧНИКИ И КАМПАНИИ', '', 'Воронка по каждому источнику:', ''];
+  for (const item of sourcePerformance) {
+    lines.push(
+      `🔗 ${item.source}`,
+      `🚀 Запуски: ${item.starts} | 👤 уникальных: ${item.uniqueStarts}`,
+      `✅ Тест: ${item.tests} | конверсия: ${item.startToTest}`,
+      `📥 Программа: ${item.downloads} | конверсия: ${item.testToDownload}`,
+      `🎯 Заявки: ${item.uniqueOffers} | конверсия: ${item.testToOffer}`,
+      '',
+    );
+  }
+  return lines.join('\\n').trim();
 }
 export function formatQuizAdminLeads(leads: Awaited<ReturnType<typeof getRecentLeads>>) {
   if (!leads.length) return '🎯 ПОСЛЕДНИЕ ЗАЯВКИ\n\nПока заявок нет.';
