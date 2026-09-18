@@ -1,0 +1,24 @@
+{
+  "exercise": {
+    "id": "unique-id",
+    "name": "string",
+    "movement_patterns": [],
+    "primary_muscles": [],
+    "secondary_muscles": [],
+    "joints": [],
+    "plane": [],
+    "technique": "string",
+    "cues": [],
+    "rom": "string",
+    "equipment": [],
+    "difficulty": "beginner|intermediate|advanced",
+    "regressions": [],
+    "progressions": [],
+    "common_errors": [],
+    "limitations": [],
+    "settings": ["home","gym","outdoor"],
+    "evidence_level": "A|B|C|D",
+    "references": [],
+    "reviewed_at": "YYYY-MM-DD"
+  }
+}
