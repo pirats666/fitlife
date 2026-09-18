@@ -4,7 +4,7 @@ if (tg) { tg.ready(); tg.expand(); tg.setHeaderColor?.('#0b0d0f'); tg.setBackgro
 const telegramUser = tg?.initDataUnsafe?.user;
 const content = document.getElementById('screenContent'); const title = document.getElementById('screenTitle'); const subtitle = document.getElementById('screenSubtitle');
 let fitLifeUser=null, workoutCatalog=[], activeWorkout=null, activeExerciseIndex=0, timer=null, remaining=0, weeklySchedule=[], clientSchedule=[], trainerClients=[], selectedClient=null, selectedClientSchedule=[], selectedClientHistory=[];
-let selectedCrmClient=null, selectedCrmPrograms=[], selectedCrmProgression=[], selectedCrmAdjustment=null;
+let selectedCrmClient=null, selectedCrmPrograms=[], selectedCrmProgression=[], selectedCrmAdjustment=null, selectedCrmProgress=null, selectedCrmMeasurements=[], selectedCrmNutrition=[], selectedCrmPayments=[], selectedCrmNotes=[], selectedCrmTab='overview';
 async function api(path, options={}) { const headers={'Content-Type':'application/json',...(tg?.initData?{'x-telegram-init-data':tg.initData}:{}),...(options.headers||{})}; const response=await fetch(`${API_BASE}${path}`,{...options,headers}); const data=await response.json(); if(!response.ok||!data.ok) throw new Error(data.error||'Ошибка запроса'); return data; }
 async function authenticate(){if(!tg?.initData)return null;return(await api('/api/auth/telegram',{method:'POST',body:JSON.stringify({initData:tg.initData})})).user;}
 async function loadWorkouts(){workoutCatalog=(await api('/api/workouts')).workouts;}
@@ -44,7 +44,7 @@ async function renderTrainerClient(clientId){
     selectedCrmClient=c.client;
     selectedCrmPrograms=programs.programs||[];
     selectedCrmProgression=progression.progression||[];
-    selectedCrmAdjustment=adjustment.adjustments||null;
+    selectedCrmAdjustment=adjustment.adjustments||null;selectedCrmProgress=progress;selectedCrmMeasurements=measurements.measurements||[];selectedCrmNutrition=nutrition.plans||[];selectedCrmPayments=payments.payments||[];selectedCrmNotes=notes.notes||[];
     title.textContent=selectedCrmClient.first_name;
     subtitle.textContent='CRM • Клиент';
     renderTrainerClientView();
@@ -72,6 +72,7 @@ function renderTrainerClientView(){
   <button class="back-button" data-screen="clients">← Назад к клиентам</button>
   <section class="profile-card"><div class="profile-avatar">👤</div><div><b>${escapeHtml(c.first_name)}${c.last_name?' '+escapeHtml(c.last_name):''}</b><span>${c.telegram_username?'@'+escapeHtml(c.telegram_username):'Telegram ID: '+c.telegram_id}</span><small>${escapeHtml(goalLabel(c.goal))} • ${escapeHtml(c.training_experience||'Опыт не указан')}</small></div></section>
 
+  <div class="crm-tabs"><button class="crm-tab" data-crm-tab="overview">Обзор</button><button class="crm-tab" data-crm-tab="programs">Программа</button><button class="crm-tab" data-crm-tab="progress">Прогресс</button><button class="crm-tab" data-crm-tab="measurements">Измерения</button><button class="crm-tab" data-crm-tab="nutrition">Питание</button><button class="crm-tab" data-crm-tab="payments">Оплаты</button><button class="crm-tab" data-crm-tab="notes">Заметки</button></div>
   <section class="stats crm-stats">
     <div><b>${c.active_program_count||0}</b><span>активных программ</span></div>
     <div><b>${c.active_nutrition_plan_count||0}</b><span>планов питания</span></div>
@@ -105,6 +106,7 @@ function renderTrainerClientView(){
   const date=document.getElementById('progDate'); if(date&&!date.value)date.value=new Date().toISOString().slice(0,10);
 }
 content?.addEventListener('click',async event=>{const wBtn=event.target.closest('[data-workout]');if(wBtn){const w=workoutCatalog.find(x=>x.id===wBtn.dataset.workout);if(w)renderWorkoutDetail(w);return}const gBtn=event.target.closest('[data-goal]');if(gBtn&&fitLifeUser){try{fitLifeUser=(await api(`/api/users/${fitLifeUser.id}`,{method:'PATCH',body:JSON.stringify({goal:gBtn.dataset.goal,onboardingCompleted:true})})).user;render('home')}catch{tg?.showAlert?.('Не удалось сохранить данные.')}return}const cBtn=event.target.closest('[data-client]');if(cBtn){renderTrainerClient(cBtn.dataset.client);return}
+if(event.target.closest('[data-crm-tab]')){selectedCrmTab=event.target.closest('[data-crm-tab]').dataset.crmTab;renderTrainerClientView();return}
 if(event.target.closest('[data-generate-program]')){
  try{
   const result=await api(`/api/trainer/crm/clients/${selectedCrmClient.id}/programs/generate`,{method:'POST'});
