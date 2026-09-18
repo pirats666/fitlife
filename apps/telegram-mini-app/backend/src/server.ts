@@ -9,6 +9,8 @@ import { getWorkout, workouts } from './workouts.js';
 import { getWeeklySchedule } from './schedule.js';
 import { getClientSchedule, setClientSchedule } from './trainer.js';
 import { handleTelegramUpdate } from './telegram-quiz.js';
+import { handleNewTelegramUpdate } from './telegram-new-bot.js';
+import { registerTelegramNewBotRoute } from './telegram-new-bot-route.js';
 import { listCrmClients, getCrmClient, createCrmClient, updateCrmClient, addClientNote, addMeasurement, addPayment } from './crm.js';
 import { createTrainingProgram, getTrainingProgram } from './programs.js';
 import { generateProgramDraft, applyProgressionToDraft } from './program-generator.js';
@@ -37,6 +39,7 @@ async function trainerAuthorized(request: { headers: Record<string, string | str
 
 app.get('/health', async () => ({ ok: true, service: 'fitlife-telegram-backend', storage: 'supabase' }));
 app.post('/api/telegram/webhook', async (request, reply) => {
+await registerTelegramNewBotRoute(app);
   const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim();
   const receivedSecret = request.headers['x-telegram-bot-api-secret-token'];
   const secret = Array.isArray(receivedSecret) ? receivedSecret[0] : receivedSecret;
