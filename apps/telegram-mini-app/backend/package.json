@@ -6,7 +6,7 @@
     "dev": "tsx src/server.ts",
     "typecheck": "tsc --noEmit",
     "build": "tsc",
-    "start": "node dist/telegram-bot.js && node dist/server.js",
+    "start": "node dist/server.js",
     "telegram:webhook": "tsx src/telegram-bot.ts"
   },
   "dependencies": {
