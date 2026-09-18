@@ -242,7 +242,7 @@ async function configureNewBotWebhook() {
   const publicBase = process.env.PUBLIC_BASE_URL?.trim();
   const base = explicit || renderUrl || (railwayDomain ? `https://${railwayDomain}` : publicBase);
   if (!base) return;
-  const url = `${base.replace(/\\/$/, '')}/api/telegram/new-bot/webhook`;
+  const url = `${base.replace(/\/$/, '')}/api/telegram/new-bot/webhook`;
   const secret = process.env.NEW_TELEGRAM_WEBHOOK_SECRET?.trim();
   const response = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
     method: 'POST',
