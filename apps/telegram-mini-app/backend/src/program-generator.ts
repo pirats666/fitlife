@@ -37,7 +37,6 @@ const templates = [
   { name: "Жим гантелей лёжа", tags: ["gym","home"], focus: "chest" },
   { name: "Тяга гантели в наклоне", tags: ["gym","home"], focus: "back" },
   { name: "Жим гантелей вверх", tags: ["gym","home"], focus: "shoulders" },
-  { name: "Ягодичный мост", tags: ["home","gym"], focus: "glutes" },
   { name: "Dead Bug", tags: ["home","street","gym"], focus: "core" },
   { name: "Ходьба быстрым темпом", tags: ["home","street","gym"], focus: "cardio" }
 ] as const;
