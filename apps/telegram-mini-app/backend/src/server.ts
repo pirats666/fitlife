@@ -10,6 +10,8 @@ import { getWeeklySchedule } from './schedule.js';
 import { getClientSchedule, setClientSchedule } from './trainer.js';
 import { handleTelegramUpdate } from './telegram-quiz.js';
 import { listCrmClients, getCrmClient, createCrmClient, updateCrmClient, addClientNote, addMeasurement, addPayment } from './crm.js';
+import { createTrainingProgram, getTrainingProgram } from './programs.js';
+
 
 
 const app = Fastify({ logger: true });
@@ -78,6 +80,23 @@ app.post<{ Params: { clientId: string }; Body: Record<string, unknown> }>('/api/
   if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
   try { return { ok: true, payment: await addPayment(request.params.clientId, request.body ?? {}) }; }
   catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Invalid payment' }); }
+});
+app.post<{ Params: { clientId: string }; Body: { name: string; goal?: string | null; starts_on?: string | null; ends_on?: string | null; rationale?: string | null; days: Array<{ day_number: number; title: string; notes?: string | null; exercises: Array<{ exercise_id?: string | null; exercise_name: string; sort_order?: number; sets?: number | null; reps?: string | null; working_weight?: number | null; rest_seconds?: number | null; tempo?: string | null; rpe?: number | null; rir?: number | null; coach_comment?: string | null; media_url?: string | null }> }> } }>('/api/trainer/crm/clients/:clientId/programs', async (request, reply) => {
+  const authUser = await authenticatedUser(headerInitData(request));
+  if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
+  try {
+    const program = await createTrainingProgram(request.params.clientId, request.body);
+    return { ok: true, program };
+  } catch (error) {
+    return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Invalid program' });
+  }
+});
+app.get<{ Params: { clientId: string; programId: string } }>('/api/trainer/crm/clients/:clientId/programs/:programId', async (request, reply) => {
+  const authUser = await authenticatedUser(headerInitData(request));
+  if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
+  const program = await getTrainingProgram(request.params.programId);
+  if (!program || program.client_id !== request.params.clientId) return reply.code(404).send({ ok: false, error: 'Program not found' });
+  return { ok: true, program };
 });
 app.get('/api/schedule', async () => ({ ok: true, schedule: getWeeklySchedule() }));
 app.get<{ Params: { telegramId: string } }>('/api/users/:telegramId/schedule', async (request, reply) => { const telegramId = Number(request.params.telegramId); const authUser = await authenticatedUser(headerInitData(request)); if (!Number.isSafeInteger(telegramId) || !authUser || authUser.id !== telegramId) return reply.code(403).send({ ok: false, error: 'Forbidden' }); return { ok: true, schedule: await getClientSchedule(telegramId) }; });
