@@ -21,6 +21,7 @@ export const experienceKeyboard = { inline_keyboard: [
 
 export const programKeyboard = { inline_keyboard: [[{ text: '📄 ПОЛУЧИТЬ ПРОГРАММУ', callback_data: 'quiz:program' }]] };
 export const afterProgramKeyboard = { inline_keyboard: [
+  [{ text: '🎯 ИНДИВИДУАЛЬНАЯ ПРОГРАММА', callback_data: 'quiz:offer' }],
   [{ text: '💬 НАПИСАТЬ ТРЕНЕРУ', callback_data: 'quiz:trainer' }],
   [{ text: '🔄 ПРОЙТИ ТЕСТ ЗАНОВО', callback_data: 'quiz:restart' }],
 ] };
