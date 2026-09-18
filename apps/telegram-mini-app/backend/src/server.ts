@@ -14,11 +14,13 @@ import { createTrainingProgram, getTrainingProgram } from './programs.js';
 import { generateProgramDraft, applyProgressionToDraft } from './program-generator.js';
 import { listClientPrograms, setProgramStatus } from './program-list.js';
 import { getClientTrainingSessions, logTrainingSession } from './training-sessions.js';
-import { getClientProgress } from './client-progress.js';\nimport { analyzeClientTrainingResults } from './program-adjustments.js';
+import { getClientProgress } from './client-progress.js';
+import { analyzeClientTrainingResults } from './program-adjustments.js';
 import { listClientMeasurements, createClientMeasurement } from './measurements.js';
 import { listClientNutritionPlans, createClientNutritionPlan, setNutritionPlanStatus } from './nutrition.js';
 import { listClientPayments, createClientPayment, updatePaymentUsage } from './payments.js';
-import { listClientNotes, createClientNote } from './notes.js';\nimport { logExercisePerformance, getExerciseProgression } from './exercise-progression.js';
+import { listClientNotes, createClientNote } from './notes.js';
+import { logExercisePerformance, getExerciseProgression } from './exercise-progression.js';
 
 
 
@@ -71,24 +73,6 @@ app.patch<{ Params: { clientId: string }; Body: Record<string, unknown> }>('/api
   if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
   try { return { ok: true, client: await updateCrmClient(request.params.clientId, request.body ?? {}) }; }
   catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Invalid client update' }); }
-});
-app.post<{ Params: { clientId: string }; Body: { note: string } }>('/api/trainer/crm/clients/:clientId/notes', async (request, reply) => {
-  const authUser = await authenticatedUser(headerInitData(request));
-  if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
-  try { return { ok: true, note: await addClientNote(request.params.clientId, request.body?.note ?? '') }; }
-  catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Invalid note' }); }
-});
-app.post<{ Params: { clientId: string }; Body: Record<string, unknown> }>('/api/trainer/crm/clients/:clientId/measurements', async (request, reply) => {
-  const authUser = await authenticatedUser(headerInitData(request));
-  if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
-  try { return { ok: true, measurement: await addMeasurement(request.params.clientId, request.body ?? {}) }; }
-  catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Invalid measurement' }); }
-});
-app.post<{ Params: { clientId: string }; Body: Record<string, unknown> }>('/api/trainer/crm/clients/:clientId/payments', async (request, reply) => {
-  const authUser = await authenticatedUser(headerInitData(request));
-  if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
-  try { return { ok: true, payment: await addPayment(request.params.clientId, request.body ?? {}) }; }
-  catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Invalid payment' }); }
 });
 app.get<{ Params: { clientId: string } }>('/api/trainer/crm/clients/:clientId/programs', async (request, reply) => {
   const authUser = await authenticatedUser(headerInitData(request));
