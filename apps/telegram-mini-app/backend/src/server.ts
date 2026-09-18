@@ -97,7 +97,7 @@ app.post<{ Params: { clientId: string } }>('/api/trainer/crm/clients/:clientId/p
   if (!client) return reply.code(404).send({ ok: false, error: 'Client not found' });
   const draft = generateProgramDraft(client);
   const progression = await getExerciseProgression(request.params.clientId);
-  const signals = progression.map((item:any) => ({
+  const signals: Parameters<typeof applyProgressionToDraft>[1] = progression.map((item:any) => ({
     exercise_name:item.exercise_name,
     start_kg:item.start_kg,
     current_kg:item.current_kg,
