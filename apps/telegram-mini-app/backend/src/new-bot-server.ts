@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import Fastify from 'fastify';
 import { registerTelegramNewBotRoute } from './telegram-new-bot-route.js';
+import { initProject2Db } from './project2-db.js';
 
 const app = Fastify({ logger: true });
 await registerTelegramNewBotRoute(app);
@@ -18,6 +19,13 @@ app.get('/health', async () => ({
 
 const port = Number(process.env.PORT ?? 10000);
 const host = process.env.HOST ?? '0.0.0.0';
+
+try {
+  await initProject2Db();
+  app.log.info('Project 2 PostgreSQL storage initialized');
+} catch (error) {
+  app.log.error({ error }, 'Project 2 PostgreSQL initialization failed');
+}
 
 async function configureWebhook() {
   const token = process.env.NEW_TELEGRAM_BOT_TOKEN?.trim();
