@@ -1,10 +1,9 @@
 import 'dotenv/config';
-import { Pool } from 'pg';
+import { getPool, initProject2Db } from './project2-db.js';
 
 type User = { id:number; username?:string; first_name?:string; last_name?:string };
 type Update = { message?: { chat:{id:number}; from?:User; text?:string }; callback_query?: { id:string; from:User; message?:{chat:{id:number}}; data?:string } };
 type Session = { step:'goal'|'experience'|'location'|'days'|'duration'|'limitations'; goal?:string; experience?:string; location?:string; days?:number; duration?:number; limitations?:string };
-type SavedProfile = { id:string; user:User; profile:Session; createdAt:string; updatedAt:string };
 
 const sessions=new Map<number,Session>();
 const token=()=>process.env.NEW_TELEGRAM_BOT_TOKEN??'';
@@ -20,62 +19,22 @@ const locations=kb([[{text:'🏠 Дома',callback_data:'new:location:home'},{t
 const days=kb([[{text:'1 раз',callback_data:'new:days:1'},{text:'2 раза',callback_data:'new:days:2'},{text:'3 раза',callback_data:'new:days:3'}],[{text:'4 раза',callback_data:'new:days:4'},{text:'5+ раз',callback_data:'new:days:5'}]]);
 const durations=kb([[{text:'30 минут',callback_data:'new:duration:30'},{text:'45 минут',callback_data:'new:duration:45'}],[{text:'60 минут',callback_data:'new:duration:60'},{text:'90 минут',callback_data:'new:duration:90'}]]);
 
-const databaseUrl=()=>process.env.DATABASE_URL?.trim()??'';
-let pool:Pool|undefined;
-let schemaReady=false;
-
-function getPool(){
-  if(!databaseUrl()) throw new Error('DATABASE_URL is required for project 2 client storage');
-  pool ??= new Pool({connectionString:databaseUrl(),ssl:{rejectUnauthorized:false},max:5});
-  return pool;
-}
-
-async function ensureStorage(){
-  if(schemaReady)return;
-  await getPool().query(`
-    CREATE TABLE IF NOT EXISTS project2_clients (
-      id TEXT PRIMARY KEY,
-      telegram_id BIGINT NOT NULL UNIQUE,
-      username TEXT,
-      first_name TEXT,
-      last_name TEXT,
-      goal TEXT,
-      experience TEXT,
-      location TEXT,
-      days_per_week INTEGER,
-      duration_minutes INTEGER,
-      limitations TEXT,
-      status TEXT NOT NULL DEFAULT 'lead',
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
-  schemaReady=true;
-}
-
 async function saveProfile(id:number,user:User,s:Session){
-  await ensureStorage();
+  await initProject2Db();
   const profileId=`tg-${id}`;
   await getPool().query(
     `INSERT INTO project2_clients
       (id,telegram_id,username,first_name,last_name,goal,experience,location,days_per_week,duration_minutes,limitations,status)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'lead')
      ON CONFLICT (telegram_id) DO UPDATE SET
-       username=EXCLUDED.username,
-       first_name=EXCLUDED.first_name,
-       last_name=EXCLUDED.last_name,
-       goal=EXCLUDED.goal,
-       experience=EXCLUDED.experience,
-       location=EXCLUDED.location,
-       days_per_week=EXCLUDED.days_per_week,
-       duration_minutes=EXCLUDED.duration_minutes,
-       limitations=EXCLUDED.limitations,
-       updated_at=NOW()`,
+       username=EXCLUDED.username, first_name=EXCLUDED.first_name, last_name=EXCLUDED.last_name,
+       goal=EXCLUDED.goal, experience=EXCLUDED.experience, location=EXCLUDED.location,
+       days_per_week=EXCLUDED.days_per_week, duration_minutes=EXCLUDED.duration_minutes,
+       limitations=EXCLUDED.limitations, updated_at=NOW()`,
     [profileId,id,user.username??null,user.first_name??null,user.last_name??null,s.goal??null,s.experience??null,s.location??null,s.days??null,s.duration??null,s.limitations??null],
   );
   return profileId;
 }
-
 function summary(s:Session){return `🎯 Цель: ${s.goal}\n📈 Опыт: ${s.experience}\n📍 Место: ${s.location}\n📅 Тренировок: ${s.days}/нед.\n⏱ Время: ${s.duration} мин\n⚠️ Ограничения: ${s.limitations||'не указаны'}`;}
 
 export async function handleNewTelegramUpdate(update:Update){
