@@ -135,6 +135,38 @@ export async function registerProject2Trainer(app: FastifyInstance) {
     return { ok: true, exercise: rows[0] };
   });
 
+  app.patch('/api/project2/trainer/days/:dayId/exercises/reorder', async (request, reply) => {
+    await initProject2Db();
+    const dayId = String((request.params as any).dayId);
+    const ids = Array.isArray((request.body as any)?.exercise_ids) ? (request.body as any).exercise_ids.map(String) : [];
+    if (!ids.length) return reply.code(400).send({ ok: false, error: 'Список упражнений пуст' });
+
+    const client = await getPool().connect();
+    try {
+      await client.query('BEGIN');
+      const { rows } = await client.query('SELECT id FROM project2_trainer_exercises WHERE day_id=$1 ORDER BY sort_order,id', [dayId]);
+      const existing = new Set(rows.map((r: any) => String(r.id)));
+      if (ids.length !== existing.size || ids.some((id: string) => !existing.has(id))) {
+        await client.query('ROLLBACK');
+        return reply.code(400).send({ ok: false, error: 'Список упражнений не соответствует дню' });
+      }
+      for (let i = 0; i < ids.length; i++) {
+        await client.query('UPDATE project2_trainer_exercises SET sort_order=$1 WHERE id=$2 AND day_id=$3', [100000 + i, ids[i], dayId]);
+      }
+      for (let i = 0; i < ids.length; i++) {
+        await client.query('UPDATE project2_trainer_exercises SET sort_order=$1 WHERE id=$2 AND day_id=$3', [i, ids[i], dayId]);
+      }
+      await client.query('COMMIT');
+      return { ok: true };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
+
+
   app.delete('/api/project2/trainer/exercises/:exerciseId', async (request, reply) => {
     await initProject2Db();
     const id = String((request.params as any).exerciseId);
