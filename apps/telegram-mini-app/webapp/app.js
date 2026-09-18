@@ -48,7 +48,7 @@ async function renderTrainerClient(clientId){
     ]);
     selectedCrmClient=c.client; selectedCrmPrograms=programs.programs||[]; selectedCrmProgression=progression.progression||[]; selectedCrmAdjustment=adjustment.adjustments||null;
     selectedCrmProgress=progress; selectedCrmMeasurements=measurements.measurements||[]; selectedCrmNutrition=nutrition.plans||[]; selectedCrmPayments=payments.payments||[]; selectedCrmNotes=notes.notes||[];
-    selectedCrmTab='overview'; title.textContent=selectedCrmClient.first_name; subtitle.textContent='CRM • Клиент'; renderTrainerClientView();
+    title.textContent=selectedCrmClient.first_name; subtitle.textContent='CRM • Клиент'; selectedCrmTab=selectedCrmTab||'overview'; renderTrainerClientView();
   }catch(error){ console.error(error); tg?.showAlert?.('Не удалось открыть клиента.'); render('clients'); }
 }
 
