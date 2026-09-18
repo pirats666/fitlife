@@ -65,23 +65,25 @@ export async function getQuizAdminStats() {
     countEvents('FOLLOWUP_1_SENT'),
     countEvents('FOLLOWUP_2_SENT'),
   ]);
-  const [quizRowsResult, locationRowsResult, experienceRowsResult, programRowsResult, sourceRowsResult, offerRowsResult] = await Promise.all([
+  const [quizRowsResult, locationRowsResult, experienceRowsResult, programRowsResult, sourceRowsResult, offerRowsResult, startRowsResult] = await Promise.all([
     db.from('quiz_results').select('telegram_id, goal'),
     db.from('quiz_results').select('location'),
     db.from('quiz_results').select('experience'),
     db.from('quiz_results').select('recommended_program'),
     db.from('quiz_results').select('source, campaign'),
     db.from('funnel_events').select('telegram_id').eq('event_name', 'OFFER_SHOWN'),
+    db.from('funnel_events').select('telegram_id').eq('event_name', 'START'),
   ]);
-  for (const result of [quizRowsResult, locationRowsResult, experienceRowsResult, programRowsResult, sourceRowsResult, offerRowsResult]) {
+  for (const result of [quizRowsResult, locationRowsResult, experienceRowsResult, programRowsResult, sourceRowsResult, offerRowsResult, startRowsResult]) {
     if (result.error) throw result.error;
   }
+  const uniqueStartUsers = new Set((startRowsResult.data ?? []).map((row) => Number(row.telegram_id))).size;
   const uniqueTestUsers = new Set((quizRowsResult.data ?? []).map((row) => Number(row.telegram_id))).size;
   const uniqueOfferUsers = new Set((offerRowsResult.data ?? []).map((row) => Number(row.telegram_id))).size;
   return {
-    users, starts, testsCompleted, programDownloads, offerShown, followup1Sent, followup2Sent, uniqueTestUsers, uniqueOfferUsers,
+    users, starts, testsCompleted, programDownloads, offerShown, followup1Sent, followup2Sent, uniqueStartUsers, uniqueTestUsers, uniqueOfferUsers,
     conversion: {
-      startToTest: percent(testsCompleted, starts),
+      startToTest: percent(uniqueTestUsers, uniqueStartUsers),
       testToDownload: percent(programDownloads, testsCompleted),
       downloadToOffer: percent(uniqueOfferUsers, programDownloads),
       testToOffer: percent(uniqueOfferUsers, uniqueTestUsers),
@@ -225,6 +227,8 @@ export function formatQuizAdminOverview(stats: Awaited<ReturnType<typeof getQuiz
     '📊 PAVEL FITNESS — АДМИН-ПАНЕЛЬ', '',
     `👥 Пользователи: ${stats.users}`,
     `🚀 Запуски теста: ${stats.starts}`,
+    `👤 Уникальных пользователей: ${stats.uniqueStartUsers}`,
+    `🔁 Повторных запусков: ${Math.max(0, stats.starts - stats.uniqueStartUsers)}`,
     `✅ Уникальных участников: ${stats.uniqueTestUsers}`,
     `📝 Завершили тест: ${stats.testsCompleted} (${stats.conversion.startToTest})`,
     `📥 Получили программу: ${stats.programDownloads} (${stats.conversion.testToDownload})`,
