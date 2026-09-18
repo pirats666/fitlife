@@ -9,7 +9,6 @@ import { getWorkout, workouts } from './workouts.js';
 import { getWeeklySchedule } from './schedule.js';
 import { getClientSchedule, setClientSchedule } from './trainer.js';
 import { handleTelegramUpdate } from './telegram-quiz.js';
-import { handleNewTelegramUpdate } from './telegram-new-bot.js';
 import { registerTelegramNewBotRoute } from './telegram-new-bot-route.js';
 import { listCrmClients, getCrmClient, createCrmClient, updateCrmClient, addClientNote, addMeasurement, addPayment } from './crm.js';
 import { createTrainingProgram, getTrainingProgram } from './programs.js';
@@ -28,6 +27,7 @@ import { logExercisePerformance, getExerciseProgression } from './exercise-progr
 
 
 const app = Fastify({ logger: true });
+await registerTelegramNewBotRoute(app);
 const configuredOrigin = process.env.WEBAPP_ORIGIN?.trim();
 await app.register(cors, { origin: configuredOrigin || true });
 const webappRoot = process.env.NODE_ENV === 'production' ? path.resolve(process.cwd(), 'webapp') : path.resolve(process.cwd(), '../webapp');
@@ -39,7 +39,6 @@ async function trainerAuthorized(request: { headers: Record<string, string | str
 
 app.get('/health', async () => ({ ok: true, service: 'fitlife-telegram-backend', storage: 'supabase' }));
 app.post('/api/telegram/webhook', async (request, reply) => {
-await registerTelegramNewBotRoute(app);
   const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim();
   const receivedSecret = request.headers['x-telegram-bot-api-secret-token'];
   const secret = Array.isArray(receivedSecret) ? receivedSecret[0] : receivedSecret;
@@ -233,3 +232,26 @@ app.get<{ Params: { clientId: string } }>('/api/users/:clientId/trainer', async 
 
 const port = Number(process.env.PORT ?? 3000); const host = process.env.HOST ?? '0.0.0.0';
 await app.listen({ port, host });
+
+async function configureNewBotWebhook() {
+  const token = process.env.NEW_TELEGRAM_BOT_TOKEN?.trim();
+  if (!token) return;
+  const explicit = process.env.NEW_TELEGRAM_WEBHOOK_URL?.trim();
+  const renderUrl = process.env.RENDER_EXTERNAL_URL?.trim();
+  const railwayDomain = process.env.RAILWAY_PUBLIC_DOMAIN?.trim();
+  const publicBase = process.env.PUBLIC_BASE_URL?.trim();
+  const base = explicit || renderUrl || (railwayDomain ? `https://${railwayDomain}` : publicBase);
+  if (!base) return;
+  const url = `${base.replace(/\\/$/, '')}/api/telegram/new-bot/webhook`;
+  const secret = process.env.NEW_TELEGRAM_WEBHOOK_SECRET?.trim();
+  const response = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ url, ...(secret ? { secret_token: secret } : {}) })
+  });
+  const result = await response.json() as { ok?: boolean; description?: string };
+  if (!response.ok || !result.ok) throw new Error(result.description ?? 'Failed to configure new Telegram bot webhook');
+  app.log.info({ webhook: url }, 'New Telegram bot webhook configured');
+}
+
+try { await configureNewBotWebhook(); } catch (error) { app.log.error(error, 'New Telegram bot webhook configuration failed'); }
