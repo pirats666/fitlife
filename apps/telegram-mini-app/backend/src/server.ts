@@ -16,6 +16,7 @@ import { listClientPrograms, setProgramStatus } from './program-list.js';
 import { getClientTrainingSessions, logTrainingSession } from './training-sessions.js';
 import { getClientProgress } from './client-progress.js';
 import { listClientMeasurements, createClientMeasurement } from './measurements.js';
+import { listClientNutritionPlans, createClientNutritionPlan, setNutritionPlanStatus } from './nutrition.js';
 
 
 
@@ -154,6 +155,24 @@ app.post<{ Params: { clientId: string }; Body: Record<string, unknown> }>('/api/
   if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
   try { return { ok: true, measurement: await createClientMeasurement(request.params.clientId, request.body ?? {}) }; }
   catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Invalid measurement' }); }
+});
+app.get<{ Params: { clientId: string } }>('/api/trainer/crm/clients/:clientId/nutrition', async (request, reply) => {
+  const authUser = await authenticatedUser(headerInitData(request));
+  if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
+  try { return { ok: true, plans: await listClientNutritionPlans(request.params.clientId) }; }
+  catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Failed to load nutrition plans' }); }
+});
+app.post<{ Params: { clientId: string }; Body: Record<string, unknown> }>('/api/trainer/crm/clients/:clientId/nutrition', async (request, reply) => {
+  const authUser = await authenticatedUser(headerInitData(request));
+  if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
+  try { return { ok: true, plan: await createClientNutritionPlan(request.params.clientId, request.body ?? {}) }; }
+  catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Invalid nutrition plan' }); }
+});
+app.patch<{ Params: { clientId: string; planId: string }; Body: { status: 'draft' | 'active' | 'completed' | 'archived' } }>('/api/trainer/crm/clients/:clientId/nutrition/:planId/status', async (request, reply) => {
+  const authUser = await authenticatedUser(headerInitData(request));
+  if (!authUser || !(await isTrainer(authUser.id))) return reply.code(403).send({ ok: false, error: 'Trainer access required' });
+  try { return { ok: true, plan: await setNutritionPlanStatus(request.params.clientId, request.params.planId, request.body.status) }; }
+  catch (error) { return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : 'Invalid nutrition status' }); }
 });
 app.get('/api/schedule', async () => ({ ok: true, schedule: getWeeklySchedule() }));
 app.get<{ Params: { telegramId: string } }>('/api/users/:telegramId/schedule', async (request, reply) => { const telegramId = Number(request.params.telegramId); const authUser = await authenticatedUser(headerInitData(request)); if (!Number.isSafeInteger(telegramId) || !authUser || authUser.id !== telegramId) return reply.code(403).send({ ok: false, error: 'Forbidden' }); return { ok: true, schedule: await getClientSchedule(telegramId) }; });
