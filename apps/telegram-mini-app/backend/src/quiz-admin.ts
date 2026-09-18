@@ -56,12 +56,14 @@ function percent(value: number, total: number) {
 }
 
 export async function getQuizAdminStats() {
-  const [users, starts, testsCompleted, programDownloads, offerShown] = await Promise.all([
+  const [users, starts, testsCompleted, programDownloads, offerShown, followup1Sent, followup2Sent] = await Promise.all([
     count('users'),
     countEvents('START'),
     count('quiz_results', 'completed_at'),
     count('quiz_results', 'program_downloaded_at'),
     countEvents('OFFER_SHOWN'),
+    countEvents('FOLLOWUP_1_SENT'),
+    countEvents('FOLLOWUP_2_SENT'),
   ]);
   const [quizRowsResult, locationRowsResult, experienceRowsResult, programRowsResult, sourceRowsResult, offerRowsResult] = await Promise.all([
     db.from('quiz_results').select('telegram_id, goal'),
@@ -77,7 +79,7 @@ export async function getQuizAdminStats() {
   const uniqueTestUsers = new Set((quizRowsResult.data ?? []).map((row) => Number(row.telegram_id))).size;
   const uniqueOfferUsers = new Set((offerRowsResult.data ?? []).map((row) => Number(row.telegram_id))).size;
   return {
-    users, starts, testsCompleted, programDownloads, offerShown, uniqueTestUsers, uniqueOfferUsers,
+    users, starts, testsCompleted, programDownloads, offerShown, followup1Sent, followup2Sent, uniqueTestUsers, uniqueOfferUsers,
     conversion: {
       startToTest: percent(testsCompleted, starts),
       testToDownload: percent(programDownloads, testsCompleted),
@@ -225,6 +227,9 @@ export function formatQuizAdminOverview(stats: Awaited<ReturnType<typeof getQuiz
     `📝 Завершили тест: ${stats.testsCompleted} (${stats.conversion.startToTest})`,
     `📥 Получили программу: ${stats.programDownloads} (${stats.conversion.testToDownload})`,
     `🎯 Индивидуальных заявок: ${stats.uniqueOfferUsers} (${stats.conversion.testToOffer})`, '',
+    '🔄 FOLLOW-UP',
+    `24 часа: ${stats.followup1Sent}`,
+    `72 часа: ${stats.followup2Sent}`, '',
     '📈 КОНВЕРСИЯ',
     `Тест → программа: ${stats.conversion.testToDownload}`,
     `Программа → индивидуальная заявка: ${stats.conversion.downloadToOffer}`, '',
