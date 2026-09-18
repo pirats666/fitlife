@@ -6,6 +6,7 @@ import { registerProject2Crm } from './project2-crm.js';
 import { registerProject2Programs } from './project2-programs.js';
 import { registerProject2Trainer } from './project2-trainer.js';
 import { registerProject2ExerciseLibrary } from './project2-exercise-library.js';
+import { registerProject2Journal } from './project2-journal.js';
 
 const app = Fastify({ logger: true });
 await registerTelegramNewBotRoute(app);
@@ -13,6 +14,7 @@ await registerProject2Crm(app);
 await registerProject2Programs(app);
 await registerProject2Trainer(app);
 await registerProject2ExerciseLibrary(app);
+await registerProject2Journal(app);
 
 app.get('/', async () => ({
   ok: true,
