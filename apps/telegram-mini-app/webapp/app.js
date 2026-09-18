@@ -10,7 +10,7 @@ async function authenticate(){if(!tg?.initData)return null;return(await api('/ap
 async function loadWorkouts(){workoutCatalog=(await api('/api/workouts')).workouts;}
 async function loadSchedule(){weeklySchedule=(await api('/api/schedule')).schedule;}
 async function loadClientSchedule(){if(fitLifeUser)clientSchedule=(await api(`/api/users/${fitLifeUser.id}/schedule`)).schedule;}
-async function loadTrainerClients(){if(fitLifeUser?.role==='trainer')trainerClients=(await api(`/api/trainer/clients?trainerId=${fitLifeUser.id}`)).clients;}
+async function loadTrainerClients(){if(fitLifeUser?.role==='trainer')trainerClients=(await api('/api/trainer/crm/clients')).clients;}
 function escapeHtml(value=''){return String(value).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
 function goalLabel(goal){return({health:'Здоровье и активность',strength:'Сила',fitness:'Общая физическая форма'}[goal]||'Не выбрана');}
 function todayWorkout(){const day=new Date().getDay()||7;const source=fitLifeUser?.role==='client'?clientSchedule:weeklySchedule;return workoutCatalog.find(w=>w.id===source.find(i=>i.day===day)?.workoutId)||null;}
@@ -81,6 +81,7 @@ function renderTrainerClientView(){
   </section>
 
   <section class="section"><div class="section-title"><h2>Программы</h2></div>
+    <button class="primary" data-generate-program>⚡ Сгенерировать программу</button><div id="generatedProgram"></div>
     ${selectedCrmPrograms.length?selectedCrmPrograms.map(p=>`<article class="list-card"><div><b>${escapeHtml(p.name)}</b><span>v${p.version||1} • ${escapeHtml(p.status)} • ${p.starts_on||'без даты'}</span><small>${escapeHtml(p.goal||'Цель не указана')}</small></div></article>`).join(''):'<article class="list-card"><div><b>Программ пока нет</b><span>Создай программу из CRM на следующем шаге.</span></div></article>'}
   </section>
 
@@ -101,8 +102,24 @@ function renderTrainerClientView(){
   `;
   const date=document.getElementById('progDate'); if(date&&!date.value)date.value=new Date().toISOString().slice(0,10);
 }
-function renderTrainerClientView(){content.innerHTML=`<button class="back-button" data-screen="clients">← Назад к клиентам</button><section class="profile-card"><div class="profile-avatar">👤</div><div><b>${escapeHtml(selectedClient.first_name)}${selectedClient.last_name?' '+escapeHtml(selectedClient.last_name):''}</b><span>${selectedClient.username?'@'+escapeHtml(selectedClient.username):'Telegram ID: '+selectedClient.id}</span><small>Цель: ${goalLabel(selectedClient.goal)}</small></div></section><section class="section"><div class="section-title"><h2>Расписание</h2></div><div class="schedule-editor">${selectedClientSchedule.map(day=>`<label class="schedule-row"><span>${day.label}</span><select class="select" data-day="${day.day}"><option value="">— отдых —</option>${workoutCatalog.map(w=>`<option value="${w.id}" ${w.id===day.workoutId?'selected':''}>${escapeHtml(w.title)}</option>`).join('')}</select></label>`).join('')}</div><button class="primary" data-save-schedule>Сохранить программу</button></section><section class="section"><div class="section-title"><h2>История</h2></div>${selectedClientHistory.length?selectedClientHistory.slice(0,10).map(i=>`<article class="list-card"><div><b>${escapeHtml(workoutCatalog.find(w=>w.id===i.workoutId)?.title||i.workoutId)}</b><span>${new Date(i.completedAt).toLocaleString('ru-RU')}</span></div></article>`).join(''):'<section class="list-card"><div><b>Пока нет завершённых тренировок</b></div></section>'}</section>`}
 content?.addEventListener('click',async event=>{const wBtn=event.target.closest('[data-workout]');if(wBtn){const w=workoutCatalog.find(x=>x.id===wBtn.dataset.workout);if(w)renderWorkoutDetail(w);return}const gBtn=event.target.closest('[data-goal]');if(gBtn&&fitLifeUser){try{fitLifeUser=(await api(`/api/users/${fitLifeUser.id}`,{method:'PATCH',body:JSON.stringify({goal:gBtn.dataset.goal,onboardingCompleted:true})})).user;render('home')}catch{tg?.showAlert?.('Не удалось сохранить данные.')}return}const cBtn=event.target.closest('[data-client]');if(cBtn){renderTrainerClient(cBtn.dataset.client);return}
+if(event.target.closest('[data-generate-program]')){
+ try{
+  const result=await api(`/api/trainer/crm/clients/${selectedCrmClient.id}/programs/generate`,{method:'POST'});
+  const draft=result.draft; window.__fitlifeDraft=draft;
+  document.getElementById('generatedProgram').innerHTML=`<article class="generated-program"><b>${escapeHtml(draft.name)}</b><span>${escapeHtml(draft.rationale)}</span>${draft.days.map((day,di)=>`<div class="program-day"><b>День ${day.day_number}: ${escapeHtml(day.title)}</b>${day.exercises.map((e,ei)=>`<div class="program-exercise"><input class="text-input" data-draft-day="${di}" data-draft-ex="${ei}" data-field="name" value="${escapeHtml(e.exercise_name)}"/><div class="form-grid"><input class="text-input" data-draft-day="${di}" data-draft-ex="${ei}" data-field="sets" type="number" value="${e.sets}"/><input class="text-input" data-draft-day="${di}" data-draft-ex="${ei}" data-field="reps" value="${escapeHtml(e.reps)}"/></div><small>${e.rest_seconds} сек • ${escapeHtml(e.coach_comment)}</small></div>`).join('')}</div>`).join('')}<button class="primary" data-save-generated-program>Сохранить и активировать</button></article>`;
+ }catch(error){console.error(error);tg?.showAlert?.('Не удалось сгенерировать программу.');}
+ return;
+}
+if(event.target.closest('[data-save-generated-program]')){
+ try{
+  const draft=window.__fitlifeDraft;if(!draft)return;
+  content.querySelectorAll('[data-draft-day]').forEach(input=>{const d=Number(input.dataset.draftDay),e=Number(input.dataset.draftEx),f=input.dataset.field;if(draft.days[d]?.exercises[e])draft.days[d].exercises[e][f]=f==='sets'?Number(input.value):input.value;});
+  await api(`/api/trainer/crm/clients/${selectedCrmClient.id}/programs`,{method:'POST',body:JSON.stringify(draft)});
+  tg?.showAlert?.('Программа сохранена и активирована 💪');window.__fitlifeDraft=null;await renderTrainerClient(selectedCrmClient.id);
+ }catch(error){console.error(error);tg?.showAlert?.('Не удалось сохранить программу.');}
+ return;
+}
 if(event.target.closest('[data-save-progression]')){
   const body={
     exercise_name:document.getElementById('progExerciseName')?.value?.trim(),
