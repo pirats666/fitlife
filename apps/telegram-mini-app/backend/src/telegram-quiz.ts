@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { createQuizResult, event, getLatestQuizResult, getLeadStatus, getProgramPdfUrl, markProgramDownloaded, markProgramRequested, setLeadStatus } from './quiz-store.js';
 import { adminMenuText, formatQuizAdminLeadCard, formatQuizAdminLeads, formatQuizAdminOverview, formatQuizAdminPrograms, formatQuizAdminSources, getQuizAdminStats, getRecentLeads, getSourcePerformance } from './quiz-admin.js';
 import { upsertUser } from './store.js';
@@ -35,6 +36,22 @@ function leadStatusKeyboard(resultId: string): InlineKeyboard {
 function isAdmin(id: number) {
   const adminId = Number(process.env.ADMIN_TELEGRAM_ID);
   return Number.isSafeInteger(adminId) && id === adminId;
+}
+
+const adminAuthenticated = new Set<number>();
+
+function adminPasswordConfigured() {
+  return Boolean(process.env.ADMIN_PANEL_PASSWORD_HASH);
+}
+
+function verifyAdminPassword(password: string) {
+  const expected = process.env.ADMIN_PANEL_PASSWORD_HASH ?? '';
+  const actual = createHash('sha256').update(password).digest('hex');
+  return Boolean(expected) && actual === expected;
+}
+
+function adminAuthKeyboard(): InlineKeyboard {
+  return { inline_keyboard: [[{ text: '🔐 ВВЕСТИ ПАРОЛЬ', callback_data: 'admin:password' }]] };
 }
 
 async function telegram(method: string, body: Record<string, unknown>) {
@@ -86,6 +103,17 @@ export async function handleTelegramUpdate(update: Update) {
     const id = message.chat.id;
     await ensureUser(message.from, id);
     if (!isAdmin(id)) { await send(id, '⛔ Доступ запрещён.'); return; }
+
+    if (!adminPasswordConfigured()) {
+      await send(id, '⚠️ Пароль админки не настроен. Обратись к владельцу бота.');
+      return;
+    }
+
+    if (!adminAuthenticated.has(id)) {
+      await send(id, '🔐 АДМИН-ПАНЕЛЬ\n\nВведи пароль для доступа:', adminAuthKeyboard());
+      return;
+    }
+
     await send(id, adminMenuText, adminKeyboard);
     return;
   }
@@ -117,6 +145,10 @@ export async function handleTelegramUpdate(update: Update) {
 
   if (cb.data.startsWith('admin:')) {
     if (!isAdmin(id)) { await send(chatId, '⛔ Доступ запрещён.'); return; }
+    if (!adminAuthenticated.has(id)) {
+      await send(chatId, '🔐 Сначала введи пароль через /admin.');
+      return;
+    }
     try {
       if (cb.data === 'admin:overview') await send(chatId, formatQuizAdminOverview(await getQuizAdminStats()), adminKeyboard);
       else if (cb.data === 'admin:leads') {
@@ -160,6 +192,21 @@ export async function handleTelegramUpdate(update: Update) {
     } catch (error) {
       console.error('Admin panel error:', error);
       await send(chatId, 'Не удалось загрузить раздел админ-панели. Проверь подключение к Supabase.', adminKeyboard);
+    }
+    return;
+  }
+
+  if (message?.text && isAdmin(message.chat.id) && !message.text.startsWith('/') && !adminAuthenticated.has(message.chat.id)) {
+    if (!adminPasswordConfigured()) {
+      await send(message.chat.id, '⚠️ Пароль админки не настроен.');
+      return;
+    }
+
+    if (verifyAdminPassword(message.text.trim())) {
+      adminAuthenticated.add(message.chat.id);
+      await send(message.chat.id, '✅ Пароль принят. Админ-панель открыта.', adminKeyboard);
+    } else {
+      await send(message.chat.id, '❌ Неверный пароль. Попробуй ещё раз через /admin.');
     }
     return;
   }
